@@ -1,0 +1,81 @@
+# =========================
+# 1. Blender 专属忽略规则
+# =========================
+# Blender 自动生成的备份和崩溃恢复文件（绝对不能提交，否则仓库会非常大）
+*.blend1
+*.blend2
+*.blend@
+crash.blend
+*.crash.txt
+# 注意：不忽略 *.blend 本身，如果你有必须要共享的基础场景模型，可以提交 *.blend
+
+# =========================
+# 2. Python 专属忽略规则 (插件开发模块)
+# =========================
+# 编译后的字节码缓存
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 虚拟环境目录（如果你们有人在本地用虚拟环境测试）
+venv/
+.venv/
+env/
+.env/
+
+# =========================
+# 3. 前端专属忽略规则 (Web 原型模块)
+# =========================
+# 依赖包（体积巨大，绝对不能提交！）
+node_modules/
+jspm_packages/
+
+# 打包构建后的产物
+dist/
+build/
+out/
+
+# 前端本地环境变量（防止泄漏 API 秘钥，比如你们接大模型时的 Token）
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# =========================
+# 4. 文档写作专属忽略规则
+# =========================
+# 如果你们团队使用 LaTeX 来排版最终提交的 PDF 文档，会产生大量编译副产物
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+*.xdv
+
+# Word/WPS 临时隐藏文件
+~$*.doc
+~$*.docx
+~$*.ppt
+~$*.pptx
+
+# =========================
+# 5. 操作系统与编辑器专属忽略规则
+# =========================
+# Mac 系统产生的恶心隐藏文件
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows 系统产生的缩略图缓存
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# 编辑器本地工作区设置（防止强行覆盖队友的本地配置）
+.vscode/
+.idea/
