@@ -9,5 +9,5 @@ jobs:
       - name: Send Message to Feishu
         run: |
           curl -X POST -H "Content-Type: application/json" \
-          -d '{"msg_type":"text","content":{"text":"🔔 播报：有成员向 SE_26Fall 仓库推送了新代码！请大家开工前注意拉取最新版本，避免冲突。"}}' \
+          -d '{"msg_type":"text","content":{"text":"🔔 播报：有成员向 SE_26Spring 仓库推送了新代码！请大家开工前注意拉取最新版本，避免冲突。"}}' \
           ${{ secrets.FEISHU_WEBHOOK }}
