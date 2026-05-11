@@ -1,13 +1,73 @@
-name: Feishu Notification
+name: AI Feishu Notification
 
-on: [push] # 每次有人推送代码时触发
+on: 
+  push:
+    branches:
+      - '*' # 监听所有分支的推送
 
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Send Message to Feishu
+      - name: Checkout code
+        uses: actions/checkout@v4 # 需要拉取一下代码环境来获取更详细的 Git 信息
+
+      - name: Generate AI Message and Send to Feishu
+        env:
+          FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          COMMITTER: ${{ github.actor }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          curl -X POST -H "Content-Type: application/json" \
-          -d '{"msg_type":"text","content":{"text":"🔔 播报：有成员向 SE_26Spring 仓库推送了新代码！请大家开工前注意拉取最新版本，避免冲突。"}}' \
-          ${{ secrets.FEISHU_WEBHOOK }}
+          python3 -c '
+          import os, urllib.request, json
+          
+          # 1. 获取环境变量
+          api_key = os.environ.get("LLM_API_KEY")
+          webhook = os.environ.get("FEISHU_WEBHOOK")
+          author = os.environ.get("COMMITTER")
+          msg = os.environ.get("COMMIT_MSG")
+          
+          # 如果提交信息为空，给个默认值
+          if not msg: msg = "进行了一些神秘的代码更新"
+          
+          # 2. 构造给大模型的 Prompt (系统提示词)
+          prompt = f"""
+          你是一个名为“赛博监工”的 AI 项目助理，负责跟进【智能城市生成系统(SE_26Spring)】的开发进度。
+          刚刚，团队成员 {author} 提交了代码，备注是：“{msg}”。
+          请你写一段发在飞书群里的通知。要求：
+          1. 用活泼、幽默或者中二的语气。
+          2. 简短总结他做了什么（基于备注信息）。
+          3. 狠狠地夸奖或激励一下他，并且顺便给其他还没提交代码的同学打打气。
+          4. 字数控制在 100 字以内，多用 Emoji。
+          """
+          
+          # 3. 调用大模型 API (这里以 DeepSeek 为例，兼容 OpenAI 格式)
+          url = "https://api.deepseek.com/chat/completions"
+          headers = {
+              "Authorization": f"Bearer {api_key}",
+              "Content-Type": "application/json"
+          }
+          data = {
+              "model": "deepseek-chat",
+              "messages": [{"role": "user", "content": prompt}],
+              "temperature": 0.7
+          }
+          
+          try:
+              req = urllib.request.Request(url, json.dumps(data).encode("utf-8"), headers)
+              response = urllib.request.urlopen(req)
+              result = json.loads(response.read().decode("utf-8"))
+              ai_text = result["choices"][0]["message"]["content"]
+          except Exception as e:
+              # 兜底机制：如果大模型抽风了，发个基础通知
+              ai_text = f"🔔 播报：{author} 提交了代码 [{msg}]。请大家开工前注意拉取最新版本，避免冲突。"
+          
+          # 4. 把大模型写好的话，推送到飞书
+          feishu_data = {
+              "msg_type": "text",
+              "content": {"text": ai_text}
+          }
+          feishu_req = urllib.request.Request(webhook, json.dumps(feishu_data).encode("utf-8"), {"Content-Type": "application/json"})
+          urllib.request.urlopen(feishu_req)
+          '
