@@ -1,0 +1,10 @@
+schema_version = "1.0.0"
+
+id = "LLMCityGenerator"
+version = "1.0.0"
+name = "The LLM City Generator2.0"
+tagline = "An add-on to generate cityscapes using geometry nodes with LLM"
+maintainer = "unknown"
+type = "add-on"
+blender_version_min = "4.3.0"
+license = ["Royalty Free"]
