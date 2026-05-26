@@ -13,3 +13,9 @@ from .mesh_attributes import (
     MESH_OT_SetmodernBuildingAttribute,
     MESH_OT_DeleteBuildingAttribute,
 )
+from .eco_ops import (
+    CG_OT_Eco_Generate_Terrain,
+    CG_OT_Eco_Generate_Lake,
+    CG_OT_Eco_Generate_River,
+    CG_OT_Eco_Add_Boat,
+)

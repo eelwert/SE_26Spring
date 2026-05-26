@@ -1,0 +1,347 @@
+import bpy
+
+
+class CG_OT_Eco_Generate_Terrain(bpy.types.Operator):
+    bl_idname = "cg.eco_generate_terrain"
+    bl_label = "Generate Terrain"
+    bl_description = "Generate procedural terrain with hills using noise displacement"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+
+        grid_size = scene.cg_terrain_grid_size
+        subdivisions = scene.cg_terrain_subdivisions
+        hill_height = scene.cg_terrain_hill_height
+        noise_scale = scene.cg_terrain_noise_scale
+        noise_detail = scene.cg_terrain_noise_detail
+        detail_enabled = scene.cg_terrain_detail_enabled
+        detail_height = scene.cg_terrain_detail_height
+
+        # Create base grid
+        bpy.ops.mesh.primitive_grid_add(
+            x_subdivisions=subdivisions,
+            y_subdivisions=subdivisions,
+            size=grid_size,
+            location=(0, 0, 0)
+        )
+        terrain_obj = context.object
+        terrain_obj.name = "CG_Terrain"
+
+        # Add Subdivision Surface modifier for vertex density
+        subsurf = terrain_obj.modifiers.new(name="Subsurf_Terrain", type='SUBSURF')
+        subsurf.levels = 2
+        subsurf.render_levels = 2
+        subsurf.subdivision_type = 'SIMPLE'
+
+        # Create main noise texture
+        tex_main = bpy.data.textures.new("CG_Terrain_Noise_Main", 'CLOUDS')
+        tex_main.noise_scale = noise_scale
+        tex_main.noise_depth = noise_detail
+
+        # Add main Displace modifier
+        disp_main = terrain_obj.modifiers.new(name="Displace_Main", type='DISPLACE')
+        disp_main.texture = tex_main
+        disp_main.strength = hill_height
+        disp_main.mid_level = 0.5
+        disp_main.texture_coords = 'LOCAL'
+
+        # Add detail noise layer if enabled
+        if detail_enabled:
+            tex_detail = bpy.data.textures.new("CG_Terrain_Noise_Detail", 'CLOUDS')
+            tex_detail.noise_scale = noise_scale * 0.3
+            tex_detail.noise_depth = 2
+
+            disp_detail = terrain_obj.modifiers.new(name="Displace_Detail", type='DISPLACE')
+            disp_detail.texture = tex_detail
+            disp_detail.strength = detail_height
+            disp_detail.mid_level = 0.5
+            disp_detail.texture_coords = 'LOCAL'
+
+        # Switch to Object mode and select the terrain
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='DESELECT')
+        terrain_obj.select_set(True)
+        context.view_layer.objects.active = terrain_obj
+
+        self.report({'INFO'}, "Terrain generated successfully.")
+        return {'FINISHED'}
+
+
+class CG_OT_Eco_Generate_Lake(bpy.types.Operator):
+    bl_idname = "cg.eco_generate_lake"
+    bl_label = "Generate Lake"
+    bl_description = "Generate a circular lake with water material and ripple effects"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+
+        lake_size = scene.cg_lake_size
+        lake_vertices = scene.cg_lake_vertices
+        ripple_strength = scene.cg_lake_ripple_strength
+        ripple_scale = scene.cg_lake_ripple_scale
+        water_color = scene.cg_lake_water_color
+
+        # Create circular water surface
+        bpy.ops.mesh.primitive_circle_add(
+            vertices=lake_vertices,
+            radius=lake_size,
+            location=(0, 0, 0.1)
+        )
+        lake_obj = context.object
+        lake_obj.name = "CG_Lake"
+
+        # Fill the circle to create a face
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.mesh.edge_face_add()
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        # Create or reuse water material
+        water_mat = bpy.data.materials.get("CG_Water_Material")
+        if water_mat is None:
+            water_mat = bpy.data.materials.new("CG_Water_Material")
+        water_mat.use_nodes = True
+        nodes = water_mat.node_tree.nodes
+        links = water_mat.node_tree.links
+
+        # Clear existing nodes
+        nodes.clear()
+
+        # Create Principled BSDF
+        bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+        bsdf.location = (0, 0)
+        bsdf.inputs['Base Color'].default_value = water_color
+        bsdf.inputs['Transmission'].default_value = 1.0
+        bsdf.inputs['Roughness'].default_value = 0.0
+        bsdf.inputs['IOR'].default_value = 1.33
+        bsdf.inputs['Specular IOR Level'].default_value = 0.5
+
+        # Create Noise Texture for ripples
+        noise = nodes.new(type='ShaderNodeTexNoise')
+        noise.location = (-400, -200)
+        noise.inputs['Scale'].default_value = ripple_scale
+        noise.inputs['Detail'].default_value = 4.0
+
+        # Create Normal Map
+        normal_map = nodes.new(type='ShaderNodeNormalMap')
+        normal_map.location = (-200, -200)
+        normal_map.inputs['Strength'].default_value = ripple_strength
+
+        # Create Output node
+        output = nodes.new(type='ShaderNodeOutputMaterial')
+        output.location = (200, 0)
+
+        # Link nodes: Noise Fac → Normal Map Color → BSDF Normal
+        links.new(noise.outputs['Fac'], normal_map.inputs['Color'])
+        links.new(normal_map.outputs['Normal'], bsdf.inputs['Normal'])
+        links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+
+        # Assign material to object
+        if lake_obj.data.materials:
+            lake_obj.data.materials[0] = water_mat
+        else:
+            lake_obj.data.materials.append(water_mat)
+
+        # Switch to Object mode and select the lake
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='DESELECT')
+        lake_obj.select_set(True)
+        context.view_layer.objects.active = lake_obj
+
+        self.report({'INFO'}, "Lake generated successfully.")
+        return {'FINISHED'}
+
+
+class CG_OT_Eco_Generate_River(bpy.types.Operator):
+    bl_idname = "cg.eco_generate_river"
+    bl_label = "Generate River"
+    bl_description = "Generate a river path with water surface along a bezier curve"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+        river_width = scene.cg_river_width
+
+        # Create bezier curve for river path
+        bpy.ops.curve.primitive_bezier_curve_add(location=(0, 0, 0.1))
+        curve_obj = context.object
+        curve_obj.name = "CG_River_Path"
+
+        # Shape the bezier curve into an S-curve
+        curve_data = curve_obj.data
+        curve_data.dimensions = '3D'
+        spline = curve_data.splines[0]
+        spline.use_smooth = True
+
+        bp0 = spline.bezier_points[0]
+        bp0.co = (-30, -15, 0)
+        bp0.handle_right_type = 'AUTO'
+        bp0.handle_left_type = 'AUTO'
+
+        bp1 = spline.bezier_points[1]
+        bp1.co = (30, 15, 0)
+        bp1.handle_right_type = 'AUTO'
+        bp1.handle_left_type = 'AUTO'
+
+        # Create river surface mesh (subdivided plane)
+        bpy.ops.mesh.primitive_plane_add(size=1, location=(0, 0, 0.05))
+        river_obj = context.object
+        river_obj.name = "CG_River_Surface"
+
+        # Subdivide plane for smooth deformation
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.mesh.subdivide(number_cuts=30)
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        # Scale to match river width along Y axis
+        river_obj.scale = (1, river_width, 1)
+
+        # Add Curve modifier to deform plane along river path
+        curve_mod = river_obj.modifiers.new(name="River_Curve", type='CURVE')
+        curve_mod.object = curve_obj
+        curve_mod.deform_axis = 'POS_X'
+
+        # Apply water material (reuse or create)
+        water_mat = bpy.data.materials.get("CG_Water_Material")
+        if water_mat is None:
+            water_mat = bpy.data.materials.new("CG_Water_Material")
+            water_mat.use_nodes = True
+            nodes = water_mat.node_tree.nodes
+            links = water_mat.node_tree.links
+            nodes.clear()
+
+            bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+            bsdf.location = (0, 0)
+            bsdf.inputs['Base Color'].default_value = (0.05, 0.2, 0.4, 1.0)
+            bsdf.inputs['Transmission'].default_value = 1.0
+            bsdf.inputs['Roughness'].default_value = 0.0
+            bsdf.inputs['IOR'].default_value = 1.33
+            bsdf.inputs['Specular IOR Level'].default_value = 0.5
+
+            noise = nodes.new(type='ShaderNodeTexNoise')
+            noise.location = (-400, -200)
+            noise.inputs['Scale'].default_value = 2.0
+            noise.inputs['Detail'].default_value = 4.0
+
+            normal_map = nodes.new(type='ShaderNodeNormalMap')
+            normal_map.location = (-200, -200)
+            normal_map.inputs['Strength'].default_value = 0.05
+
+            output = nodes.new(type='ShaderNodeOutputMaterial')
+            output.location = (200, 0)
+
+            links.new(noise.outputs['Fac'], normal_map.inputs['Color'])
+            links.new(normal_map.outputs['Normal'], bsdf.inputs['Normal'])
+            links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+
+        if river_obj.data.materials:
+            river_obj.data.materials[0] = water_mat
+        else:
+            river_obj.data.materials.append(water_mat)
+
+        # Select both curve and surface
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='DESELECT')
+        curve_obj.select_set(True)
+        river_obj.select_set(True)
+        context.view_layer.objects.active = river_obj
+
+        self.report({'INFO'}, "River generated successfully.")
+        return {'FINISHED'}
+
+
+class CG_OT_Eco_Add_Boat(bpy.types.Operator):
+    bl_idname = "cg.eco_add_boat"
+    bl_label = "Add Boat"
+    bl_description = "Add a procedural boat that follows the river path"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+        boat_scale = scene.cg_boat_scale
+        flow_speed = scene.cg_river_flow_speed
+
+        # Check if river path exists
+        river_curve = bpy.data.objects.get("CG_River_Path")
+        if river_curve is None:
+            self.report({'WARNING'}, "No river found. Generate a river first.")
+            return {'CANCELLED'}
+
+        # --- Build a simple boat from primitives ---
+        # Hull: flattened cube
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.3))
+        hull = context.object
+        hull.name = "CG_Boat_Hull"
+        hull.scale = (1.5, 0.5, 0.2)
+
+        # Taper the front in edit mode
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='DESELECT')
+
+        # Select front-right and front-left top vertices and move them down + in
+        mesh = hull.data
+        bpy.ops.object.mode_set(mode='OBJECT')
+        for v in mesh.vertices:
+            if v.co.x > 0.5 and v.co.z > 0:
+                v.co.z -= 0.3
+            if v.co.x > 0.7:
+                v.co.x -= 0.3
+
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        # Cabin: small cube on top
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.55))
+        cabin = context.object
+        cabin.name = "CG_Boat_Cabin"
+        cabin.scale = (0.5, 0.3, 0.15)
+
+        # Parent cabin to hull
+        cabin.parent = hull
+
+        # Join cabin into hull
+        bpy.ops.object.select_all(action='DESELECT')
+        hull.select_set(True)
+        cabin.select_set(True)
+        context.view_layer.objects.active = hull
+        bpy.ops.object.join()
+
+        # Rename and scale the boat
+        hull.name = "CG_Boat"
+        hull.scale *= boat_scale
+
+        # --- Add Follow Path constraint ---
+        follow_constraint = hull.constraints.new(type='FOLLOW_PATH')
+        follow_constraint.target = river_curve
+        follow_constraint.use_curve_follow = True
+        follow_constraint.forward_axis = 'FORWARD_X'
+        follow_constraint.up_axis = 'UP_Z'
+        follow_constraint.use_fixed_location = True
+
+        hull.location = (0, 0, 0)
+
+        # --- Animate: keyframe offset for looped movement ---
+        con = follow_constraint
+        con.offset = 0
+        con.keyframe_insert(data_path="offset", frame=1)
+        con.offset = 100.0 * flow_speed
+        con.keyframe_insert(data_path="offset", frame=250)
+
+        # Make animation loop by setting extrapolation
+        if hull.animation_data and hull.animation_data.action:
+            for fcurve in hull.animation_data.action.fcurves:
+                if fcurve.data_path.startswith('constraints["') and fcurve.data_path.endswith('"].offset'):
+                    for kf in fcurve.keyframe_points:
+                        kf.interpolation = 'LINEAR'
+                    fcurve.modifiers.new('CYCLES')
+
+        # Select the boat
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='DESELECT')
+        hull.select_set(True)
+        context.view_layer.objects.active = hull
+
+        self.report({'INFO'}, "Boat added successfully. Play animation to see it move.")
+        return {'FINISHED'}
