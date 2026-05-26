@@ -29,6 +29,7 @@ env/
 # 依赖包（体积巨大，绝对不能提交！）
 node_modules/
 jspm_packages/
+.npm-cache/
 
 # 打包构建后的产物
 dist/
