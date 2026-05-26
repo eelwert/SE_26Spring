@@ -36,6 +36,10 @@ dist/
 build/
 out/
 
+# 测试报告和临时结果
+test-results/
+playwright-report/
+
 # 前端本地环境变量（防止泄漏 API 秘钥，比如你们接大模型时的 Token）
 .env
 .env.local
