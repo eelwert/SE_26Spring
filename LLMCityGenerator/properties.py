@@ -335,6 +335,18 @@ def register_scene_properties():
         name="Lake Size",
         description="Radius of the lake",
         default=20.0, min=1.0, max=100.0, subtype='DISTANCE')
+    bpy.types.Scene.cg_lake_block_size = bpy.props.FloatProperty(
+        name="Block Size",
+        description="Size of the square ground block containing the lake",
+        default=80.0, min=10.0, max=500.0, subtype='DISTANCE')
+    bpy.types.Scene.cg_lake_edge_irregularity = bpy.props.FloatProperty(
+        name="Edge Irregularity",
+        description="Randomness of the lake shoreline (0 = perfect circle, 1 = very irregular)",
+        default=0.3, min=0.0, max=1.0, subtype='FACTOR')
+    bpy.types.Scene.cg_lake_seed = bpy.props.IntProperty(
+        name="Lake Seed",
+        description="Random seed for lake shoreline shape",
+        default=0, min=0, max=1000)
     bpy.types.Scene.cg_lake_vertices = bpy.props.IntProperty(
         name="Vertices",
         description="Number of vertices for circular lake",
@@ -406,6 +418,9 @@ def unregister_scene_properties():
     del bpy.types.Scene.cg_terrain_low_color
     del bpy.types.Scene.cg_terrain_high_color
     del bpy.types.Scene.cg_lake_size
+    del bpy.types.Scene.cg_lake_block_size
+    del bpy.types.Scene.cg_lake_edge_irregularity
+    del bpy.types.Scene.cg_lake_seed
     del bpy.types.Scene.cg_lake_vertices
     del bpy.types.Scene.cg_lake_ripple_strength
     del bpy.types.Scene.cg_lake_ripple_scale

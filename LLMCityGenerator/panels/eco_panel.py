@@ -71,7 +71,10 @@ class CG_Eco_Lake_Panel(bpy.types.Panel):
 
         box = layout.box()
         box.label(text="Lake Generation")
+        box.prop(scene, "cg_lake_block_size")
         box.prop(scene, "cg_lake_size")
+        box.prop(scene, "cg_lake_edge_irregularity")
+        box.prop(scene, "cg_lake_seed")
         box.prop(scene, "cg_lake_vertices")
 
         box.separator()

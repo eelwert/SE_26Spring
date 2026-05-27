@@ -181,79 +181,134 @@ class CG_OT_Eco_Generate_Lake(bpy.types.Operator):
         scene = context.scene
 
         lake_size = scene.cg_lake_size
+        block_size = scene.cg_lake_block_size
+        edge_irregular = scene.cg_lake_edge_irregularity
+        lake_seed = scene.cg_lake_seed
         lake_vertices = scene.cg_lake_vertices
         ripple_strength = scene.cg_lake_ripple_strength
         ripple_scale = scene.cg_lake_ripple_scale
         water_color = scene.cg_lake_water_color
 
-        # Create circular water surface
+        import random
+        import math
+        random.seed(lake_seed)
+
+        # --- Step 1: Create park block using City Generator's park system ---
+        bpy.ops.mesh.primitive_grid_add(
+            x_subdivisions=1, y_subdivisions=1,
+            size=block_size, location=(0, 0, 0))
+        block_obj = context.object
+        block_obj.name = "CG_Lake_Block"
+
+        # Ensure City_Generator_2.0 node group exists
+        node_group_name = 'City_Generator_2.0'
+        if node_group_name not in bpy.data.node_groups:
+            from ..utils import append_data
+            append_data("NodeTree", node_group_name)
+
+        # Apply CG modifier
+        mod = block_obj.modifiers.new(name=node_group_name, type='NODES')
+        mod.node_group = bpy.data.node_groups.get(node_group_name)
+
+        # Configure: Buildings OFF, Streets ON (required for parks)
+        mod["Socket_142"] = False  # Buildings off
+        mod["Socket_143"] = True   # Streets on
+        mod["Socket_144"] = False  # Traffic off
+
+        # Mark all faces as park
+        mesh = block_obj.data
+        if "assign Park" not in mesh.attributes:
+            mesh.attributes.new(name="assign Park", type='INT', domain='FACE')
+        for i in range(len(mesh.polygons)):
+            mesh.attributes["assign Park"].data[i].value = 1
+
+        # Tune park appearance
+        mod["Socket_158"] = 8.0    # Tree Distance Min
+        mod["Socket_159"] = 0.6    # Tree Density Factor
+        mod["Socket_161"] = 0.6    # Min Tree Scale
+        mod["Socket_162"] = 1.2    # Max Tree Scale
+
+        # --- Step 2: Create irregular lake surface ---
         bpy.ops.mesh.primitive_circle_add(
             vertices=lake_vertices,
             radius=lake_size,
-            location=(0, 0, 0.1)
+            location=(0, 0, 0.15)
         )
         lake_obj = context.object
         lake_obj.name = "CG_Lake"
 
-        # Fill the circle to create a face
+        # Jitter circle vertices radially for natural shoreline
+        lake_mesh = lake_obj.data
+        for v in lake_mesh.vertices:
+            dx = v.co.x
+            dy = v.co.y
+            dist = math.sqrt(dx * dx + dy * dy)
+            if dist > 0.001:
+                offset = random.uniform(-edge_irregular, edge_irregular) * lake_size * 0.35
+                factor = 1.0 + offset / dist
+                v.co.x *= factor
+                v.co.y *= factor
+
+        # Fill the face
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
         bpy.ops.mesh.edge_face_add()
         bpy.ops.object.mode_set(mode='OBJECT')
 
-        # Create or reuse water material
+        # Add Solidify for visible water edge
+        solid_mod = lake_obj.modifiers.new(name="Solidify_Water", type='SOLIDIFY')
+        solid_mod.thickness = 0.15
+        solid_mod.offset = 0.0
+
+        # --- Step 3: Create/reuse water material ---
         water_mat = bpy.data.materials.get("CG_Water_Material")
         if water_mat is None:
             water_mat = bpy.data.materials.new("CG_Water_Material")
         water_mat.use_nodes = True
         nodes = water_mat.node_tree.nodes
         links = water_mat.node_tree.links
-
-        # Clear existing nodes
         nodes.clear()
 
-        # Create Principled BSDF
         bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
         bsdf.location = (0, 0)
         bsdf.inputs['Base Color'].default_value = water_color
-        bsdf.inputs['Transmission'].default_value = 1.0
+        bsdf.inputs['Transmission Weight'].default_value = 0.92
         bsdf.inputs['Roughness'].default_value = 0.0
+        bsdf.inputs['Alpha'].default_value = 0.85
         bsdf.inputs['IOR'].default_value = 1.33
         bsdf.inputs['Specular IOR Level'].default_value = 0.5
 
-        # Create Noise Texture for ripples
         noise = nodes.new(type='ShaderNodeTexNoise')
         noise.location = (-400, -200)
         noise.inputs['Scale'].default_value = ripple_scale
         noise.inputs['Detail'].default_value = 4.0
 
-        # Create Normal Map
         normal_map = nodes.new(type='ShaderNodeNormalMap')
         normal_map.location = (-200, -200)
         normal_map.inputs['Strength'].default_value = ripple_strength
 
-        # Create Output node
         output = nodes.new(type='ShaderNodeOutputMaterial')
         output.location = (200, 0)
 
-        # Link nodes: Noise Fac → Normal Map Color → BSDF Normal
         links.new(noise.outputs['Fac'], normal_map.inputs['Color'])
         links.new(normal_map.outputs['Normal'], bsdf.inputs['Normal'])
         links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
 
-        # Assign material to object
         if lake_obj.data.materials:
             lake_obj.data.materials[0] = water_mat
         else:
             lake_obj.data.materials.append(water_mat)
 
-        # Switch to Object mode and select the lake
+        # --- Step 4: Parent lake to block and select ---
+        lake_obj.parent = block_obj
+
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.select_all(action='DESELECT')
+        block_obj.select_set(True)
         lake_obj.select_set(True)
-        context.view_layer.objects.active = lake_obj
+        context.view_layer.objects.active = block_obj
 
-        self.report({'INFO'}, "Lake generated successfully.")
+        self.report({'INFO'}, "Lake block generated successfully.")
         return {'FINISHED'}
 
 
@@ -319,8 +374,9 @@ class CG_OT_Eco_Generate_River(bpy.types.Operator):
             bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
             bsdf.location = (0, 0)
             bsdf.inputs['Base Color'].default_value = (0.05, 0.2, 0.4, 1.0)
-            bsdf.inputs['Transmission'].default_value = 1.0
+            bsdf.inputs['Transmission Weight'].default_value = 0.92
             bsdf.inputs['Roughness'].default_value = 0.0
+            bsdf.inputs['Alpha'].default_value = 0.85
             bsdf.inputs['IOR'].default_value = 1.33
             bsdf.inputs['Specular IOR Level'].default_value = 0.5
 
