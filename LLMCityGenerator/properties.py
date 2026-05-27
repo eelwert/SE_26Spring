@@ -319,6 +319,16 @@ def register_scene_properties():
         name="Apply to City Grid",
         description="Also apply terrain displacement to the city grid object",
         default=False)
+    bpy.types.Scene.cg_terrain_low_color = bpy.props.FloatVectorProperty(
+        name="Low Color",
+        description="Color for low ground areas",
+        default=(0.15, 0.35, 0.08, 1.0),
+        min=0.0, max=1.0, subtype='COLOR', size=4)
+    bpy.types.Scene.cg_terrain_high_color = bpy.props.FloatVectorProperty(
+        name="High Color",
+        description="Color for hill peaks",
+        default=(0.45, 0.33, 0.18, 1.0),
+        min=0.0, max=1.0, subtype='COLOR', size=4)
 
     # Lake
     bpy.types.Scene.cg_lake_size = bpy.props.FloatProperty(
@@ -393,6 +403,8 @@ def unregister_scene_properties():
     del bpy.types.Scene.cg_terrain_detail_height
     del bpy.types.Scene.cg_terrain_detail_enabled
     del bpy.types.Scene.cg_terrain_apply_to_city
+    del bpy.types.Scene.cg_terrain_low_color
+    del bpy.types.Scene.cg_terrain_high_color
     del bpy.types.Scene.cg_lake_size
     del bpy.types.Scene.cg_lake_vertices
     del bpy.types.Scene.cg_lake_ripple_strength

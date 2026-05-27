@@ -58,6 +58,59 @@ class CG_OT_Eco_Generate_Terrain(bpy.types.Operator):
             disp_detail.mid_level = 0.5
             disp_detail.texture_coords = 'LOCAL'
 
+        # --- Create height-based terrain material ---
+        terrain_mat = bpy.data.materials.get("CG_Terrain_Material")
+        if terrain_mat is None:
+            terrain_mat = bpy.data.materials.new("CG_Terrain_Material")
+        terrain_mat.use_nodes = True
+        nodes = terrain_mat.node_tree.nodes
+        links = terrain_mat.node_tree.links
+        nodes.clear()
+
+        # Principled BSDF
+        bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+        bsdf.location = (200, 0)
+        bsdf.inputs['Roughness'].default_value = 0.8
+
+        # ColorRamp to blend low/high colors based on height
+        color_ramp = nodes.new(type='ShaderNodeValToRGB')
+        color_ramp.location = (0, 0)
+        color_ramp.color_ramp.elements[0].color = scene.cg_terrain_low_color
+        color_ramp.color_ramp.elements[1].color = scene.cg_terrain_high_color
+        # Shift the blend point for more green at the bottom
+        color_ramp.color_ramp.elements[1].position = 0.6
+
+        # Geometry node → Position → Separate XYZ → extract Z for height
+        geometry = nodes.new(type='ShaderNodeNewGeometry')
+        geometry.location = (-600, 0)
+        separate_xyz = nodes.new(type='ShaderNodeSeparateXYZ')
+        separate_xyz.location = (-400, 0)
+
+        # Map Range: remap Z from [-strength/2, +strength/2] to [0, 1]
+        map_range = nodes.new(type='ShaderNodeMapRange')
+        map_range.location = (-200, 0)
+        map_range.inputs['From Min'].default_value = -hill_height * 0.5
+        map_range.inputs['From Max'].default_value = hill_height * 0.5
+        map_range.inputs['To Min'].default_value = 0.0
+        map_range.inputs['To Max'].default_value = 1.0
+
+        # Output
+        output = nodes.new(type='ShaderNodeOutputMaterial')
+        output.location = (400, 0)
+
+        # Links
+        links.new(geometry.outputs['Position'], separate_xyz.inputs['Vector'])
+        links.new(separate_xyz.outputs['Z'], map_range.inputs['Value'])
+        links.new(map_range.outputs['Result'], color_ramp.inputs['Fac'])
+        links.new(color_ramp.outputs['Color'], bsdf.inputs['Base Color'])
+        links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+
+        # Assign material
+        if terrain_obj.data.materials:
+            terrain_obj.data.materials[0] = terrain_mat
+        else:
+            terrain_obj.data.materials.append(terrain_mat)
+
         # --- Optionally apply terrain displacement to city grid ---
         if scene.cg_terrain_apply_to_city:
             city_obj = None
