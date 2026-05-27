@@ -58,6 +58,56 @@ class CG_OT_Eco_Generate_Terrain(bpy.types.Operator):
             disp_detail.mid_level = 0.5
             disp_detail.texture_coords = 'LOCAL'
 
+        # --- Optionally apply terrain displacement to city grid ---
+        if scene.cg_terrain_apply_to_city:
+            city_obj = None
+            for obj in bpy.data.objects:
+                if obj.type == 'MESH':
+                    mod = obj.modifiers.get("City_Generator_2.0")
+                    if mod:
+                        city_obj = obj
+                        break
+
+            if city_obj is None:
+                self.report({'WARNING'}, "No city grid found. Apply City Generator first.")
+            else:
+                bpy.context.view_layer.objects.active = city_obj
+
+                # Add Subdivision Surface (before CG modifier, for smooth displacement)
+                subsurf_name = "Subsurf_City"
+                if subsurf_name not in city_obj.modifiers:
+                    subsurf = city_obj.modifiers.new(name=subsurf_name, type='SUBSURF')
+                    # Move Subsurf to before City_Generator_2.0
+                    cg_idx = city_obj.modifiers.find("City_Generator_2.0")
+                    sub_idx = city_obj.modifiers.find(subsurf_name)
+                    city_obj.modifiers.move(sub_idx, cg_idx)
+                    subsurf.levels = 2
+                    subsurf.render_levels = 2
+                    subsurf.subdivision_type = 'SIMPLE'
+
+                # Remove previous terrain displace modifiers
+                for old_mod_name in ("Displace_Terrain_Main", "Displace_Terrain_Detail"):
+                    old_mod = city_obj.modifiers.get(old_mod_name)
+                    if old_mod:
+                        city_obj.modifiers.remove(old_mod)
+
+                # Add displace modifiers (placed after CG modifier)
+                disp_city = city_obj.modifiers.new(name="Displace_Terrain_Main", type='DISPLACE')
+                disp_city.texture = tex_main
+                disp_city.strength = hill_height
+                disp_city.mid_level = 0.5
+                disp_city.texture_coords = 'LOCAL'
+
+                if detail_enabled:
+                    disp_city_detail = city_obj.modifiers.new(
+                        name="Displace_Terrain_Detail", type='DISPLACE')
+                    disp_city_detail.texture = tex_detail
+                    disp_city_detail.strength = detail_height
+                    disp_city_detail.mid_level = 0.5
+                    disp_city_detail.texture_coords = 'LOCAL'
+
+                self.report({'INFO'}, "Terrain displacement applied to city grid.")
+
         # Switch to Object mode and select the terrain
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.select_all(action='DESELECT')

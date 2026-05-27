@@ -290,15 +290,15 @@ def register_scene_properties():
     bpy.types.Scene.cg_terrain_hill_height = bpy.props.FloatProperty(
         name="Hill Height",
         description="Maximum height of terrain hills",
-        default=50.0, min=0.0, max=500.0, subtype='DISTANCE')
+        default=60.0, min=0.0, max=500.0, subtype='DISTANCE')
     bpy.types.Scene.cg_terrain_noise_scale = bpy.props.FloatProperty(
         name="Noise Scale",
-        description="Scale of the noise texture for terrain (larger = broader hills)",
-        default=2.5, min=0.1, max=10.0)
+        description="Scale of the noise texture (larger = fewer/broader hills, 8-15 for 2-3 hills)",
+        default=8.0, min=0.1, max=25.0)
     bpy.types.Scene.cg_terrain_noise_detail = bpy.props.IntProperty(
         name="Noise Detail",
-        description="Detail level of noise texture (lower = smoother, 0-16)",
-        default=2, min=0, max=16)
+        description="Detail level of noise texture (0 = smooth dome hills, 0-16)",
+        default=0, min=0, max=16)
     bpy.types.Scene.cg_terrain_grid_size = bpy.props.FloatProperty(
         name="Grid Size",
         description="Size of the terrain grid",
@@ -314,7 +314,11 @@ def register_scene_properties():
     bpy.types.Scene.cg_terrain_detail_enabled = bpy.props.BoolProperty(
         name="Enable Detail Layer",
         description="Add a second noise layer for fine surface details",
-        default=True)
+        default=False)
+    bpy.types.Scene.cg_terrain_apply_to_city = bpy.props.BoolProperty(
+        name="Apply to City Grid",
+        description="Also apply terrain displacement to the city grid object",
+        default=False)
 
     # Lake
     bpy.types.Scene.cg_lake_size = bpy.props.FloatProperty(
@@ -388,6 +392,7 @@ def unregister_scene_properties():
     del bpy.types.Scene.cg_terrain_subdivisions
     del bpy.types.Scene.cg_terrain_detail_height
     del bpy.types.Scene.cg_terrain_detail_enabled
+    del bpy.types.Scene.cg_terrain_apply_to_city
     del bpy.types.Scene.cg_lake_size
     del bpy.types.Scene.cg_lake_vertices
     del bpy.types.Scene.cg_lake_ripple_strength
