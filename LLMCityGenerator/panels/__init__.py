@@ -15,3 +15,4 @@ from .building_settings import (
     CG_Building_Roof_Panel,
 )
 from .night_lighting import CG_Night_Lighting_Panel, InteriorPanel
+from .dynamics_panel import CG_PT_Dynamics_Panel

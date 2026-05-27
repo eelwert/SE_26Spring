@@ -224,6 +224,100 @@ def add_custom_properties():
     )
 
 
+# --- Dynamics-related scene properties ---
+
+
+def _dynamics_property_update(self, context):
+    """Placeholder update callback for dynamics properties."""
+    pass
+
+
+def _add_dynamics_properties():
+    """Register dynamics-related scene properties."""
+    bpy.types.Scene.cg_car_density = bpy.props.IntProperty(
+        name="Car Density",
+        description="Number of cars per road segment",
+        default=10,
+        min=0,
+        max=200,
+        update=_dynamics_property_update,
+    )
+    bpy.types.Scene.cg_car_speed_min = bpy.props.FloatProperty(
+        name="Min Speed",
+        description="Minimum car speed (m/s)",
+        default=5.0,
+        min=1.0,
+        max=50.0,
+        update=_dynamics_property_update,
+    )
+    bpy.types.Scene.cg_car_speed_max = bpy.props.FloatProperty(
+        name="Max Speed",
+        description="Maximum car speed (m/s)",
+        default=15.0,
+        min=1.0,
+        max=50.0,
+        update=_dynamics_property_update,
+    )
+    bpy.types.Scene.cg_pedestrian_density = bpy.props.IntProperty(
+        name="Pedestrian Density",
+        description="Number of pedestrians per sidewalk segment",
+        default=5,
+        min=0,
+        max=200,
+        update=_dynamics_property_update,
+    )
+    bpy.types.Scene.cg_pedestrian_speed = bpy.props.FloatProperty(
+        name="Walking Speed",
+        description="Pedestrian walking speed (m/s)",
+        default=1.5,
+        min=0.5,
+        max=5.0,
+        update=_dynamics_property_update,
+    )
+    bpy.types.Scene.cg_traffic_light_green = bpy.props.IntProperty(
+        name="Green Duration",
+        description="Green light duration in frames",
+        default=120,
+        min=30,
+        max=600,
+        update=_dynamics_property_update,
+    )
+    bpy.types.Scene.cg_traffic_light_yellow = bpy.props.IntProperty(
+        name="Yellow Duration",
+        description="Yellow light duration in frames",
+        default=30,
+        min=10,
+        max=120,
+        update=_dynamics_property_update,
+    )
+    bpy.types.Scene.cg_traffic_light_red = bpy.props.IntProperty(
+        name="Red Duration",
+        description="Red light duration in frames",
+        default=120,
+        min=30,
+        max=600,
+        update=_dynamics_property_update,
+    )
+    bpy.types.Scene.cg_dynamics_active = bpy.props.BoolProperty(
+        name="Dynamics Active",
+        description="Whether the dynamic simulation is currently active",
+        default=False,
+    )
+
+
+def _remove_dynamics_properties():
+    """Remove dynamics-related scene properties."""
+    del bpy.types.Scene.cg_car_density
+    del bpy.types.Scene.cg_car_speed_min
+    del bpy.types.Scene.cg_car_speed_max
+    del bpy.types.Scene.cg_pedestrian_density
+    del bpy.types.Scene.cg_pedestrian_speed
+    del bpy.types.Scene.cg_traffic_light_green
+    del bpy.types.Scene.cg_traffic_light_yellow
+    del bpy.types.Scene.cg_traffic_light_red
+    del bpy.types.Scene.cg_dynamics_active
+
+
 # --- Scene property registration (called from register) ---
 
 def register_scene_properties():
@@ -286,6 +380,7 @@ def register_scene_properties():
     )
 
     add_custom_properties()
+    _add_dynamics_properties()
     # Note: add_emission_properties() is not called here as in the original code
     # It is defined but never activated in register().
 
@@ -309,3 +404,5 @@ def unregister_scene_properties():
     del bpy.types.Scene.emission_strength
     del bpy.types.Scene.light_probability
     del bpy.types.Scene.seed
+
+    _remove_dynamics_properties()
