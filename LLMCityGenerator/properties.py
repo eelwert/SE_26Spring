@@ -294,7 +294,7 @@ def register_scene_properties():
     bpy.types.Scene.cg_terrain_noise_scale = bpy.props.FloatProperty(
         name="Noise Scale",
         description="Scale of the noise texture (larger = fewer/broader hills, 8-15 for 2-3 hills)",
-        default=8.0, min=0.1, max=25.0)
+        default=15.0, min=0.1, max=30.0)
     bpy.types.Scene.cg_terrain_noise_detail = bpy.props.IntProperty(
         name="Noise Detail",
         description="Detail level of noise texture (0 = smooth dome hills, 0-16)",

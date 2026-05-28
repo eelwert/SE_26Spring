@@ -45,10 +45,6 @@ class CG_Eco_Terrain_Panel(bpy.types.Panel):
             box.prop(scene, "cg_terrain_detail_height")
 
         box.separator()
-        box.prop(scene, "cg_terrain_low_color")
-        box.prop(scene, "cg_terrain_high_color")
-
-        box.separator()
         box.prop(scene, "cg_terrain_apply_to_city")
 
         row = box.row()

@@ -34,17 +34,27 @@ class CG_OT_Eco_Generate_Terrain(bpy.types.Operator):
         subsurf.render_levels = 2
         subsurf.subdivision_type = 'SIMPLE'
 
+        # --- Edge falloff vertex group (1 at center, 0 at edges) ---
+        vg = terrain_obj.vertex_groups.new(name="Edge_Falloff")
+        half = grid_size * 0.5
+        for v in terrain_obj.data.vertices:
+            dist = max(abs(v.co.x), abs(v.co.y)) / half  # 0 at center, 1 at edge
+            weight = 1.0 - dist * dist  # quadratic falloff for smooth blend
+            weight = max(0.0, min(1.0, weight))
+            vg.add([v.index], weight, 'REPLACE')
+
         # Create main noise texture
         tex_main = bpy.data.textures.new("CG_Terrain_Noise_Main", 'CLOUDS')
         tex_main.noise_scale = noise_scale
         tex_main.noise_depth = noise_detail
 
-        # Add main Displace modifier
+        # Add main Displace modifier (uses edge falloff vertex group)
         disp_main = terrain_obj.modifiers.new(name="Displace_Main", type='DISPLACE')
         disp_main.texture = tex_main
         disp_main.strength = hill_height
         disp_main.mid_level = 0.5
         disp_main.texture_coords = 'LOCAL'
+        disp_main.vertex_group = "Edge_Falloff"
 
         # Add detail noise layer if enabled
         if detail_enabled:
@@ -57,53 +67,24 @@ class CG_OT_Eco_Generate_Terrain(bpy.types.Operator):
             disp_detail.strength = detail_height
             disp_detail.mid_level = 0.5
             disp_detail.texture_coords = 'LOCAL'
+            disp_detail.vertex_group = "Edge_Falloff"
 
-        # --- Create height-based terrain material ---
+        # --- Park-matching grass material ---
         terrain_mat = bpy.data.materials.get("CG_Terrain_Material")
         if terrain_mat is None:
             terrain_mat = bpy.data.materials.new("CG_Terrain_Material")
         terrain_mat.use_nodes = True
         nodes = terrain_mat.node_tree.nodes
-        links = terrain_mat.node_tree.links
         nodes.clear()
 
-        # Principled BSDF
         bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
-        bsdf.location = (200, 0)
-        bsdf.inputs['Roughness'].default_value = 0.8
+        bsdf.location = (0, 0)
+        bsdf.inputs['Base Color'].default_value = (0.12, 0.35, 0.06, 1.0)
+        bsdf.inputs['Roughness'].default_value = 0.85
 
-        # ColorRamp to blend low/high colors based on height
-        color_ramp = nodes.new(type='ShaderNodeValToRGB')
-        color_ramp.location = (0, 0)
-        color_ramp.color_ramp.elements[0].color = scene.cg_terrain_low_color
-        color_ramp.color_ramp.elements[1].color = scene.cg_terrain_high_color
-        # Shift the blend point for more green at the bottom
-        color_ramp.color_ramp.elements[1].position = 0.6
-
-        # Geometry node → Position → Separate XYZ → extract Z for height
-        geometry = nodes.new(type='ShaderNodeNewGeometry')
-        geometry.location = (-600, 0)
-        separate_xyz = nodes.new(type='ShaderNodeSeparateXYZ')
-        separate_xyz.location = (-400, 0)
-
-        # Map Range: remap Z from [-strength/2, +strength/2] to [0, 1]
-        map_range = nodes.new(type='ShaderNodeMapRange')
-        map_range.location = (-200, 0)
-        map_range.inputs['From Min'].default_value = -hill_height * 0.5
-        map_range.inputs['From Max'].default_value = hill_height * 0.5
-        map_range.inputs['To Min'].default_value = 0.0
-        map_range.inputs['To Max'].default_value = 1.0
-
-        # Output
         output = nodes.new(type='ShaderNodeOutputMaterial')
-        output.location = (400, 0)
-
-        # Links
-        links.new(geometry.outputs['Position'], separate_xyz.inputs['Vector'])
-        links.new(separate_xyz.outputs['Z'], map_range.inputs['Value'])
-        links.new(map_range.outputs['Result'], color_ramp.inputs['Fac'])
-        links.new(color_ramp.outputs['Color'], bsdf.inputs['Base Color'])
-        links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+        output.location = (200, 0)
+        terrain_mat.node_tree.links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
 
         # Assign material
         if terrain_obj.data.materials:
