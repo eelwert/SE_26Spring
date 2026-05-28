@@ -334,45 +334,61 @@ class CG_OT_Eco_Generate_River(bpy.types.Operator):
         scene = context.scene
         river_width = scene.cg_river_width
 
-        # Create bezier curve for river path
+        # --- Create bezier curve for river path ---
         bpy.ops.curve.primitive_bezier_curve_add(location=(0, 0, 0.1))
         curve_obj = context.object
         curve_obj.name = "CG_River_Path"
 
-        # Shape the bezier curve into an S-curve
         curve_data = curve_obj.data
         curve_data.dimensions = '3D'
         spline = curve_data.splines[0]
         spline.use_smooth = True
-
         bp0 = spline.bezier_points[0]
         bp0.co = (-30, -15, 0)
-        bp0.handle_right_type = 'AUTO'
         bp0.handle_left_type = 'AUTO'
-
+        bp0.handle_right_type = 'AUTO'
         bp1 = spline.bezier_points[1]
         bp1.co = (30, 15, 0)
-        bp1.handle_right_type = 'AUTO'
         bp1.handle_left_type = 'AUTO'
+        bp1.handle_right_type = 'AUTO'
 
-        # Create river surface mesh (subdivided plane)
-        bpy.ops.mesh.primitive_plane_add(size=1, location=(0, 0, 0.05))
-        river_obj = context.object
-        river_obj.name = "CG_River_Surface"
+        # Sample curve by converting to mesh (gives dense edge loop)
+        curve_data.resolution_u = 64
+        bpy.ops.object.select_all(action='DESELECT')
+        curve_obj.select_set(True)
+        context.view_layer.objects.active = curve_obj
+        bpy.ops.object.duplicate()
+        sampled_obj = context.object
+        sampled_obj.name = "CG_River_Surface"
+        bpy.ops.object.convert(target='MESH')
 
-        # Subdivide plane for smooth deformation
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.mesh.subdivide(number_cuts=30)
-        bpy.ops.object.mode_set(mode='OBJECT')
+        # Build ribbon: offset center-line vertices left/right by half width
+        mesh = sampled_obj.data
+        center_verts = [(v.co.x, v.co.y, v.co.z) for v in mesh.vertices]
 
-        # Scale to match river width along Y axis
-        river_obj.scale = (1, river_width, 1)
+        # Build new mesh with pairs of ribbon vertices + quad faces
+        hw = river_width * 0.5
+        verts = []
+        faces = []
+        for i, (cx, cy, cz) in enumerate(center_verts):
+            verts.append((cx, cy - hw, cz))  # left
+            verts.append((cx, cy + hw, cz))  # right
+            if i > 0:
+                a = (i - 1) * 2
+                b = i * 2
+                faces.append((a, a + 1, b + 1, b))
 
-        # Add Curve modifier to deform plane along river path
-        curve_mod = river_obj.modifiers.new(name="River_Curve", type='CURVE')
-        curve_mod.object = curve_obj
-        curve_mod.deform_axis = 'POS_X'
+        # Replace mesh data
+        new_mesh = bpy.data.meshes.new("River_Ribbon")
+        new_mesh.from_pydata(verts, [], faces)
+        new_mesh.update()
+        sampled_obj.data = new_mesh
+        bpy.data.meshes.remove(mesh)
+
+        # Add Solidify for visible water edge
+        solid_mod = sampled_obj.modifiers.new(name="Solidify_Water", type='SOLIDIFY')
+        solid_mod.thickness = 0.15
+        solid_mod.offset = 0.0
 
         # Apply water material (reuse or create)
         water_mat = bpy.data.materials.get("CG_Water_Material")
@@ -408,17 +424,17 @@ class CG_OT_Eco_Generate_River(bpy.types.Operator):
             links.new(normal_map.outputs['Normal'], bsdf.inputs['Normal'])
             links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
 
-        if river_obj.data.materials:
-            river_obj.data.materials[0] = water_mat
+        if sampled_obj.data.materials:
+            sampled_obj.data.materials[0] = water_mat
         else:
-            river_obj.data.materials.append(water_mat)
+            sampled_obj.data.materials.append(water_mat)
 
-        # Select both curve and surface
+        # Select both objects
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.select_all(action='DESELECT')
         curve_obj.select_set(True)
-        river_obj.select_set(True)
-        context.view_layer.objects.active = river_obj
+        sampled_obj.select_set(True)
+        context.view_layer.objects.active = sampled_obj
 
         self.report({'INFO'}, "River generated successfully.")
         return {'FINISHED'}
