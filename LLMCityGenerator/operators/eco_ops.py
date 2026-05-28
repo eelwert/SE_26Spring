@@ -331,10 +331,16 @@ class CG_OT_Eco_Generate_River(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
+        import random
+        import math
+
         scene = context.scene
         river_width = scene.cg_river_width
+        river_seed = scene.cg_river_seed
 
-        # --- Create bezier curve for river path ---
+        rng = random.Random(river_seed)
+
+        # --- Create meandering bezier curve ---
         bpy.ops.curve.primitive_bezier_curve_add(location=(0, 0, 0.1))
         curve_obj = context.object
         curve_obj.name = "CG_River_Path"
@@ -343,14 +349,34 @@ class CG_OT_Eco_Generate_River(bpy.types.Operator):
         curve_data.dimensions = '3D'
         spline = curve_data.splines[0]
         spline.use_smooth = True
-        bp0 = spline.bezier_points[0]
-        bp0.co = (-30, -15, 0)
-        bp0.handle_left_type = 'AUTO'
-        bp0.handle_right_type = 'AUTO'
-        bp1 = spline.bezier_points[1]
-        bp1.co = (30, 15, 0)
-        bp1.handle_left_type = 'AUTO'
-        bp1.handle_right_type = 'AUTO'
+
+        # Generate random meandering path: sample points along a line,
+        # offset each perpendicularly by a random amount
+        start = (-30, -15)
+        end = (30, 15)
+        dx = end[0] - start[0]
+        dy = end[1] - start[1]
+        length = math.sqrt(dx * dx + dy * dy)
+        nx = -dy / length  # perpendicular normal x
+        ny = dx / length   # perpendicular normal y
+        max_meander = length * 0.15  # max offset ~15% of length
+
+        num_pts = 6  # number of control points
+        points = []
+        for i in range(num_pts):
+            t = i / (num_pts - 1)
+            cx = start[0] + dx * t
+            cy = start[1] + dy * t
+            offset = rng.uniform(-max_meander, max_meander)
+            points.append((cx + nx * offset, cy + ny * offset, 0.0))
+
+        # Rebuild spline with calculated points
+        spline.bezier_points.add(num_pts - 2)  # already has 2
+        for i, (px, py, pz) in enumerate(points):
+            bp = spline.bezier_points[i]
+            bp.co = (px, py, pz)
+            bp.handle_left_type = 'AUTO'
+            bp.handle_right_type = 'AUTO'
 
         # Sample curve by converting to mesh (gives dense edge loop)
         curve_data.resolution_u = 64

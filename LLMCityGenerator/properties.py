@@ -372,6 +372,10 @@ def register_scene_properties():
         name="River Width",
         description="Width of the river surface",
         default=3.0, min=0.5, max=20.0, subtype='DISTANCE')
+    bpy.types.Scene.cg_river_seed = bpy.props.IntProperty(
+        name="River Seed",
+        description="Random seed for river path shape",
+        default=0, min=0, max=1000)
     bpy.types.Scene.cg_river_flow_speed = bpy.props.FloatProperty(
         name="Flow Speed",
         description="Speed of river flow and boat movement",
@@ -426,5 +430,6 @@ def unregister_scene_properties():
     del bpy.types.Scene.cg_lake_ripple_scale
     del bpy.types.Scene.cg_lake_water_color
     del bpy.types.Scene.cg_river_width
+    del bpy.types.Scene.cg_river_seed
     del bpy.types.Scene.cg_river_flow_speed
     del bpy.types.Scene.cg_boat_scale

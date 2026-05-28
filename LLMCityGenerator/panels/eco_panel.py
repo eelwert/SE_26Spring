@@ -104,6 +104,7 @@ class CG_Eco_River_Panel(bpy.types.Panel):
         box = layout.box()
         box.label(text="River Generation")
         box.prop(scene, "cg_river_width")
+        box.prop(scene, "cg_river_seed")
 
         row = box.row()
         row.scale_y = 1.5
