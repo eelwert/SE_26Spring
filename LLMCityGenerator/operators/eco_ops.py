@@ -491,76 +491,144 @@ class CG_OT_Eco_Add_Boat(bpy.types.Operator):
             self.report({'WARNING'}, "No river found. Select a river curve first.")
             return {'CANCELLED'}
 
-        # --- Build a simple boat from primitives ---
-        bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.3))
-        hull = context.object
-        hull.name = "CG_Boat_Hull"
-        hull.scale = (1.5, 0.5, 0.2)
+        # --- Load boat from external .blend, or build procedural fallback ---
+        import os
+        from ..constants import ADDON_DIR
 
-        # Taper the front
-        mesh = hull.data
-        for v in mesh.vertices:
-            if v.co.x > 0.5 and v.co.z > 0:
-                v.co.z -= 0.3
-            if v.co.x > 0.7:
-                v.co.x -= 0.3
+        boat_file = os.path.join(ADDON_DIR, "Wooden Boat.blend")
+        boat_obj = None
 
-        # Cabin
-        bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.55))
-        cabin = context.object
-        cabin.name = "CG_Boat_Cabin"
-        cabin.scale = (0.5, 0.3, 0.15)
-        cabin.parent = hull
+        if os.path.exists(boat_file):
+            # Load ALL objects from the blend file, keep only meshes
+            with bpy.data.libraries.load(boat_file) as (data_from, data_to):
+                all_names = [n for n in (data_from.objects or [])]
 
-        # Join
-        bpy.ops.object.select_all(action='DESELECT')
-        hull.select_set(True)
-        cabin.select_set(True)
-        context.view_layer.objects.active = hull
-        bpy.ops.object.join()
+            loaded = []
+            directory = os.path.join(ADDON_DIR, "Wooden Boat.blend", "Object")
+            for obj_name in all_names:
+                if obj_name in bpy.data.objects:
+                    continue
+                bpy.ops.wm.append(
+                    directory=directory, filename=obj_name, autoselect=True)
+                candidate = bpy.data.objects.get(obj_name)
+                if candidate and candidate.type == 'MESH':
+                    loaded.append(candidate)
+                elif candidate:
+                    bpy.data.objects.remove(candidate, do_unlink=True)
 
-        hull.name = "CG_Boat"
-        hull.scale *= boat_scale
+            if loaded:
+                # Pick the largest mesh (by vertex count) as the main boat
+                boat_obj = max(loaded, key=lambda o: len(o.data.vertices))
+                boat_obj.name = "CG_Boat"
+                boat_obj.location = (0, 0, 0.75)
+                boat_obj.scale *= boat_scale
+                # Parent smaller parts (oars, sails, etc.) to the main boat
+                for part in loaded:
+                    if part != boat_obj:
+                        part.parent = boat_obj
+                        part.name = f"CG_Boat_Part"
+                self.report({'INFO'},
+                    f"Loaded boat from Wooden Boat.blend ({len(loaded)} parts)")
 
-        # --- Boat material ---
-        boat_mat = bpy.data.materials.get("CG_Boat_Material")
-        if boat_mat is None:
-            boat_mat = bpy.data.materials.new("CG_Boat_Material")
-            boat_mat.use_nodes = True
-            nodes = boat_mat.node_tree.nodes
-            nodes.clear()
-            bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
-            bsdf.location = (0, 0)
-            bsdf.inputs['Base Color'].default_value = (0.35, 0.20, 0.08, 1.0)
-            bsdf.inputs['Roughness'].default_value = 0.65
-            out = nodes.new(type='ShaderNodeOutputMaterial')
-            out.location = (200, 0)
-            boat_mat.node_tree.links.new(bsdf.outputs['BSDF'], out.inputs['Surface'])
-        if hull.data.materials:
-            hull.data.materials[0] = boat_mat
+        if boat_obj is None:
+            self.report({'WARNING'}, "Wooden Boat.blend not found or empty, "
+                        "using procedural boat instead.")
+            # Fallback: procedural boat
+            bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.3))
+            boat_obj = context.object
+            boat_obj.name = "CG_Boat"
+            boat_obj.scale = (1.5, 0.5, 0.2)
+            boat_obj.scale *= boat_scale
+
+            mesh = boat_obj.data
+            for v in mesh.vertices:
+                if v.co.x > 0.5 and v.co.z > 0:
+                    v.co.z -= 0.3
+                if v.co.x > 0.7:
+                    v.co.x -= 0.3
+
+            bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.55))
+            cabin = context.object
+            cabin.name = "CG_Boat_Cabin"
+            cabin.scale = (0.5, 0.3, 0.15)
+            cabin.parent = boat_obj
+            bpy.ops.object.select_all(action='DESELECT')
+            boat_obj.select_set(True)
+            cabin.select_set(True)
+            context.view_layer.objects.active = boat_obj
+            bpy.ops.object.join()
+
+            boat_mat = bpy.data.materials.get("CG_Boat_Material")
+            if boat_mat is None:
+                boat_mat = bpy.data.materials.new("CG_Boat_Material")
+                boat_mat.use_nodes = True
+                nodes = boat_mat.node_tree.nodes
+                nodes.clear()
+                bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+                bsdf.location = (0, 0)
+                bsdf.inputs['Base Color'].default_value = (0.35, 0.20, 0.08, 1.0)
+                bsdf.inputs['Roughness'].default_value = 0.65
+                out = nodes.new(type='ShaderNodeOutputMaterial')
+                out.location = (200, 0)
+                boat_mat.node_tree.links.new(bsdf.outputs['BSDF'], out.inputs['Surface'])
+            if boat_obj.data.materials:
+                boat_obj.data.materials[0] = boat_mat
+            else:
+                boat_obj.data.materials.append(boat_mat)
+
+            boat_obj.location = (0, 0, 0.75)
+
+        # --- Place boat at a random point along the river ---
+        import random as _random
+        import math as _math
+
+        # Find the river surface that belongs to this curve
+        # The curve is parented to the surface (surface = curve.parent)
+        river_surface = river_curve.parent
+        if river_surface is None:
+            # Fallback: find by name
+            for obj in bpy.data.objects:
+                if obj.name.startswith("CG_River_Surface"):
+                    river_surface = obj
+                    break
+
+        if river_surface and len(river_surface.data.vertices) >= 4:
+            verts = river_surface.data.vertices
+            num_pairs = len(verts) // 2
+            lo = max(1, int(num_pairs * 0.15))
+            hi = min(num_pairs - 2, int(num_pairs * 0.85))
+            idx = _random.randint(lo, hi)
+
+            # Center point between left (2*idx) and right (2*idx+1)
+            vl = verts[2 * idx].co
+            vr = verts[2 * idx + 1].co
+            center = (vl + vr) * 0.5
+
+            # Tangent direction from neighbor center points
+            vl_prev = verts[2 * (idx - 1)].co
+            vr_prev = verts[2 * (idx - 1) + 1].co
+            vl_next = verts[2 * (idx + 1)].co
+            vr_next = verts[2 * (idx + 1) + 1].co
+            prev_c = (vl_prev + vr_prev) * 0.5
+            next_c = (vl_next + vr_next) * 0.5
+            direction = (next_c - prev_c).normalized()
+
+            # Position boat at center, raised above water
+            world_pos = river_surface.matrix_world @ center
+            boat_obj.location = (world_pos.x, world_pos.y, world_pos.z + 0.75)
+
+            # Rotate: boat forward (+Y) aligned with river tangent
+            boat_obj.rotation_euler = (0, 0, _math.atan2(direction.x, direction.y))
         else:
-            hull.data.materials.append(boat_mat)
-
-        # --- Follow Path constraint ---
-        follow_constraint = hull.constraints.new(type='FOLLOW_PATH')
-        follow_constraint.target = river_curve
-        follow_constraint.use_curve_follow = True
-        follow_constraint.forward_axis = 'FORWARD_Y'
-        follow_constraint.up_axis = 'UP_Z'
-
-        # Keyframe offset_factor (0→1) so boat moves along the whole path
-        follow_constraint.offset_factor = 0.0
-        follow_constraint.keyframe_insert(data_path="offset_factor", frame=1)
-        follow_constraint.offset_factor = 1.0
-        end_frame = int(250 / flow_speed)
-        follow_constraint.keyframe_insert(data_path="offset_factor", frame=end_frame)
+            # Fallback: place near the curve origin
+            boat_obj.location = (0, 0, 0.75)
 
         # Select the boat
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.select_all(action='DESELECT')
-        hull.select_set(True)
-        context.view_layer.objects.active = hull
+        boat_obj.select_set(True)
+        context.view_layer.objects.active = boat_obj
 
         self.report({'INFO'},
-            f"Boat added on '{river_curve.name}'. Timeline: frame 1 to {end_frame}.")
+            f"Boat placed on '{river_curve.name}' at a random point.")
         return {'FINISHED'}
