@@ -455,10 +455,11 @@ class CG_OT_Eco_Generate_River(bpy.types.Operator):
         else:
             sampled_obj.data.materials.append(water_mat)
 
-        # Select both objects
+        # Parent curve to surface so they stay together
+        curve_obj.parent = sampled_obj
+
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.select_all(action='DESELECT')
-        curve_obj.select_set(True)
         sampled_obj.select_set(True)
         context.view_layer.objects.active = sampled_obj
 
@@ -477,7 +478,7 @@ class CG_OT_Eco_Add_Boat(bpy.types.Operator):
         boat_scale = scene.cg_boat_scale
         flow_speed = scene.cg_river_flow_speed
 
-        # Find river curve: use selected curve, otherwise find first CG_River_Path*
+        # Use selected curve, or fall back to any CG_River_Path*
         river_curve = None
         if context.active_object and context.active_object.type == 'CURVE':
             river_curve = context.active_object
@@ -487,8 +488,7 @@ class CG_OT_Eco_Add_Boat(bpy.types.Operator):
                     river_curve = obj
                     break
         if river_curve is None:
-            self.report({'WARNING'},
-                        "No river found. Select a river curve or generate one first.")
+            self.report({'WARNING'}, "No river found. Select a river curve first.")
             return {'CANCELLED'}
 
         # --- Build a simple boat from primitives ---
@@ -545,17 +545,15 @@ class CG_OT_Eco_Add_Boat(bpy.types.Operator):
         follow_constraint = hull.constraints.new(type='FOLLOW_PATH')
         follow_constraint.target = river_curve
         follow_constraint.use_curve_follow = True
-        follow_constraint.forward_axis = 'FORWARD_X'
+        follow_constraint.forward_axis = 'FORWARD_Y'
         follow_constraint.up_axis = 'UP_Z'
-        follow_constraint.use_fixed_location = True
-        hull.location = (0, 0, 0)
 
-        # --- Animate along path (press Space to play) ---
-        con = follow_constraint
-        con.offset = 0
-        con.keyframe_insert(data_path="offset", frame=1)
-        con.offset = 100.0 * flow_speed
-        con.keyframe_insert(data_path="offset", frame=250)
+        # Keyframe offset_factor (0→1) so boat moves along the whole path
+        follow_constraint.offset_factor = 0.0
+        follow_constraint.keyframe_insert(data_path="offset_factor", frame=1)
+        follow_constraint.offset_factor = 1.0
+        end_frame = int(250 / flow_speed)
+        follow_constraint.keyframe_insert(data_path="offset_factor", frame=end_frame)
 
         # Select the boat
         bpy.ops.object.mode_set(mode='OBJECT')
@@ -564,5 +562,5 @@ class CG_OT_Eco_Add_Boat(bpy.types.Operator):
         context.view_layer.objects.active = hull
 
         self.report({'INFO'},
-            f"Boat added on '{river_curve.name}'. Press Space to play animation.")
+            f"Boat added on '{river_curve.name}'. Timeline: frame 1 to {end_frame}.")
         return {'FINISHED'}
