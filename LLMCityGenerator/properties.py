@@ -302,11 +302,11 @@ def register_scene_properties():
     bpy.types.Scene.cg_terrain_grid_size = bpy.props.FloatProperty(
         name="Grid Size",
         description="Size of the terrain grid",
-        default=200.0, min=50.0, max=1000.0, subtype='DISTANCE')
+        default=50.0, min=20.0, max=500.0, subtype='DISTANCE')
     bpy.types.Scene.cg_terrain_subdivisions = bpy.props.IntProperty(
         name="Subdivisions",
         description="Number of grid subdivisions per axis",
-        default=50, min=10, max=200)
+        default=30, min=10, max=200)
     bpy.types.Scene.cg_terrain_detail_height = bpy.props.FloatProperty(
         name="Detail Height",
         description="Height of the secondary noise detail layer",

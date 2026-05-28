@@ -69,24 +69,51 @@ class CG_OT_Eco_Generate_Terrain(bpy.types.Operator):
             disp_detail.texture_coords = 'LOCAL'
             disp_detail.vertex_group = "Edge_Falloff"
 
-        # --- Park-matching grass material ---
+        # --- Load baked CG park ground texture ---
+        import os as _os
+        from ..constants import ADDON_DIR
+
         terrain_mat = bpy.data.materials.get("CG_Terrain_Material")
         if terrain_mat is None:
             terrain_mat = bpy.data.materials.new("CG_Terrain_Material")
         terrain_mat.use_nodes = True
         nodes = terrain_mat.node_tree.nodes
+        links = terrain_mat.node_tree.links
         nodes.clear()
 
         bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
-        bsdf.location = (0, 0)
-        bsdf.inputs['Base Color'].default_value = (0.12, 0.35, 0.06, 1.0)
-        bsdf.inputs['Roughness'].default_value = 0.85
+        bsdf.location = (200, 0)
+        bsdf.inputs['Roughness'].default_value = 0.80
+
+        # Load baked park texture (tile it to match terrain size)
+        tex_path = _os.path.join(ADDON_DIR, "CG_Park_Ground.png")
+        if _os.path.exists(tex_path):
+            img = bpy.data.images.load(tex_path)
+
+            # Texture coordinate: use Object space, scale to tile properly
+            tex_coord = nodes.new(type='ShaderNodeTexCoord')
+            tex_coord.location = (-600, 0)
+
+            mapping = nodes.new(type='ShaderNodeMapping')
+            mapping.location = (-400, 0)
+            # 2 tiles across the grid (Object coords span grid_size units)
+            s = 4.0 / grid_size
+            mapping.inputs['Scale'].default_value = (s, s, 1.0)
+
+            tex_node = nodes.new(type='ShaderNodeTexImage')
+            tex_node.location = (-200, 0)
+            tex_node.image = img
+
+            links.new(tex_coord.outputs['Object'], mapping.inputs['Vector'])
+            links.new(mapping.outputs['Vector'], tex_node.inputs['Vector'])
+            links.new(tex_node.outputs['Color'], bsdf.inputs['Base Color'])
+        else:
+            bsdf.inputs['Base Color'].default_value = (0.12, 0.35, 0.06, 1.0)
 
         output = nodes.new(type='ShaderNodeOutputMaterial')
-        output.location = (200, 0)
-        terrain_mat.node_tree.links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+        output.location = (400, 0)
+        links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
 
-        # Assign material
         if terrain_obj.data.materials:
             terrain_obj.data.materials[0] = terrain_mat
         else:
