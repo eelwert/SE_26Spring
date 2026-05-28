@@ -477,78 +477,85 @@ class CG_OT_Eco_Add_Boat(bpy.types.Operator):
         boat_scale = scene.cg_boat_scale
         flow_speed = scene.cg_river_flow_speed
 
-        # Check if river path exists
-        river_curve = bpy.data.objects.get("CG_River_Path")
+        # Find river curve: use selected curve, otherwise find first CG_River_Path*
+        river_curve = None
+        if context.active_object and context.active_object.type == 'CURVE':
+            river_curve = context.active_object
+        else:
+            for obj in bpy.data.objects:
+                if obj.type == 'CURVE' and obj.name.startswith("CG_River_Path"):
+                    river_curve = obj
+                    break
         if river_curve is None:
-            self.report({'WARNING'}, "No river found. Generate a river first.")
+            self.report({'WARNING'},
+                        "No river found. Select a river curve or generate one first.")
             return {'CANCELLED'}
 
         # --- Build a simple boat from primitives ---
-        # Hull: flattened cube
         bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.3))
         hull = context.object
         hull.name = "CG_Boat_Hull"
         hull.scale = (1.5, 0.5, 0.2)
 
-        # Taper the front in edit mode
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='DESELECT')
-
-        # Select front-right and front-left top vertices and move them down + in
+        # Taper the front
         mesh = hull.data
-        bpy.ops.object.mode_set(mode='OBJECT')
         for v in mesh.vertices:
             if v.co.x > 0.5 and v.co.z > 0:
                 v.co.z -= 0.3
             if v.co.x > 0.7:
                 v.co.x -= 0.3
 
-        bpy.ops.object.mode_set(mode='OBJECT')
-
-        # Cabin: small cube on top
+        # Cabin
         bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.55))
         cabin = context.object
         cabin.name = "CG_Boat_Cabin"
         cabin.scale = (0.5, 0.3, 0.15)
-
-        # Parent cabin to hull
         cabin.parent = hull
 
-        # Join cabin into hull
+        # Join
         bpy.ops.object.select_all(action='DESELECT')
         hull.select_set(True)
         cabin.select_set(True)
         context.view_layer.objects.active = hull
         bpy.ops.object.join()
 
-        # Rename and scale the boat
         hull.name = "CG_Boat"
         hull.scale *= boat_scale
 
-        # --- Add Follow Path constraint ---
+        # --- Boat material ---
+        boat_mat = bpy.data.materials.get("CG_Boat_Material")
+        if boat_mat is None:
+            boat_mat = bpy.data.materials.new("CG_Boat_Material")
+            boat_mat.use_nodes = True
+            nodes = boat_mat.node_tree.nodes
+            nodes.clear()
+            bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+            bsdf.location = (0, 0)
+            bsdf.inputs['Base Color'].default_value = (0.35, 0.20, 0.08, 1.0)
+            bsdf.inputs['Roughness'].default_value = 0.65
+            out = nodes.new(type='ShaderNodeOutputMaterial')
+            out.location = (200, 0)
+            boat_mat.node_tree.links.new(bsdf.outputs['BSDF'], out.inputs['Surface'])
+        if hull.data.materials:
+            hull.data.materials[0] = boat_mat
+        else:
+            hull.data.materials.append(boat_mat)
+
+        # --- Follow Path constraint ---
         follow_constraint = hull.constraints.new(type='FOLLOW_PATH')
         follow_constraint.target = river_curve
         follow_constraint.use_curve_follow = True
         follow_constraint.forward_axis = 'FORWARD_X'
         follow_constraint.up_axis = 'UP_Z'
         follow_constraint.use_fixed_location = True
-
         hull.location = (0, 0, 0)
 
-        # --- Animate: keyframe offset for looped movement ---
+        # --- Animate along path (press Space to play) ---
         con = follow_constraint
         con.offset = 0
         con.keyframe_insert(data_path="offset", frame=1)
         con.offset = 100.0 * flow_speed
         con.keyframe_insert(data_path="offset", frame=250)
-
-        # Make animation loop by setting extrapolation
-        if hull.animation_data and hull.animation_data.action:
-            for fcurve in hull.animation_data.action.fcurves:
-                if fcurve.data_path.startswith('constraints["') and fcurve.data_path.endswith('"].offset'):
-                    for kf in fcurve.keyframe_points:
-                        kf.interpolation = 'LINEAR'
-                    fcurve.modifiers.new('CYCLES')
 
         # Select the boat
         bpy.ops.object.mode_set(mode='OBJECT')
@@ -556,5 +563,6 @@ class CG_OT_Eco_Add_Boat(bpy.types.Operator):
         hull.select_set(True)
         context.view_layer.objects.active = hull
 
-        self.report({'INFO'}, "Boat added successfully. Play animation to see it move.")
+        self.report({'INFO'},
+            f"Boat added on '{river_curve.name}'. Press Space to play animation.")
         return {'FINISHED'}
