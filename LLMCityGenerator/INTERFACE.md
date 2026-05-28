@@ -216,12 +216,13 @@ dynamics/
 
 ### 生成的对象集合
 
-所有动态对象位于 `Dynamic_Traffic` 父集合下:
-- `Dynamic_Traffic_Paths` — 从 mesh 边提取的道路 Bezier 曲线
+所有 Python 生成的动态对象位于 `Dynamic_Traffic` 父集合下:
+- `Dynamic_Traffic_Paths` — 从 mesh 边提取的双向车道 Bezier 曲线
 - `Dynamic_Sidewalk_Paths` — 人行道偏移曲线（道路两侧各一条）
-- `Dynamic_Cars` — 车辆对象（彩色方块或资产集合实例，直接定位到曲线上）
 - `Dynamic_Pedestrians` — 行人对象（彩色圆柱体，直接定位到人行道曲线上）
 - `Dynamic_Traffic_Lights` — 交通灯对象（球体 + 发光材质，位于路口上方）
+
+车辆由 Geo Nodes 原生仿真直接在场景中实例化，不走 Python 系统。
 
 ### 自定义属性
 
@@ -233,12 +234,10 @@ dynamics/
 
 ### 驱动方式
 
-使用 `bpy.app.timers` 定时器（~30 Hz）驱动，非帧回调:
-1. 定时器在 `SimulationManager.setup()` 时注册，`cleanup()` 时自动停止
-2. 读取 `scene.frame_current` 计算真实时间差 `dt`，保证帧率无关
-3. 每 tick 更新交通灯周期 → 推进车辆 offset → Bezier 求值 → 设 obj.location + rotation_euler
-4. 每 tick 末尾调用 `bpy.context.view_layer.update()` 强制 depsgraph 更新视口
-5. 红灯暂停、黄灯减速、终点回绕逻辑不变
+**纯 Python 驱动**（`bpy.app.timers` ~30 Hz）：汽车、行人、交通灯均由 Python 系统统一管理。
+- 每 tick：更新交通灯状态 → 驱动汽车位置 → 推进行人位置 → `bpy.context.view_layer.update()`
+- 汽车和行人通过 `CarManager.place_on_curve()` 直接设置 `obj.location` / `obj.rotation_euler`
+- 不再依赖 Geo Nodes 仿真缓存
 
 ### LLM 函数 API (`function_api.py`)
 
@@ -301,7 +300,117 @@ roads = RoadAnalyzer.extract_roads(mesh_obj)
 RoadAnalyzer.cleanup_road_curves()
 ```
 
+## 道路布局系统（Road Layout）
+
+`layout/` 包提供道路布局的两种生成方式：手动坐标输入和手绘草图提取。输出为 mesh 对象（vertices=路口，edges=道路），可作为 City Generator 和动态仿真的输入。
+
+### 包结构
+
+```
+layout/
+├── __init__.py              # 导出
+├── point_solver.py          # PointSolver: 坐标点 → mesh
+├── sketch_processor.py      # SketchProcessor: 图像 → 线段 → mesh（cv2/LLM 双模式）
+└── layout_api.py            # LLM 可调用函数 + 参数 Schema
+```
+
+### 新增操作符
+
+- `cg.preview_point_layout` — 解析坐标文本，创建预览 mesh
+- `cg.apply_point_layout` — 解析坐标，应用为正式道路布局 mesh
+- `cg.apply_sketch_layout` — 加载草图 → 提取线条 → 创建 mesh
+
+### 新增面板
+
+- `CG_PT_Layout_Panel`（`CG_Setting_panel` 子面板）
+  - 标题: "Road Layout Control"，默认折叠
+  - 坐标输入: 文本输入框（格式 `x,y;x,y;...`）+ Preview / Apply 按钮
+  - 草图输入: 文件选择器 + Threshold (0.1-1.0) + Min Length (5-500) + 生成按钮
+
+### 新增 Scene 属性
+
+- `cg_layout_points_text` (String, 坐标文本)
+- `cg_sketch_image_path` (String, FILE_PATH, 草图路径)
+- `cg_sketch_threshold` (Float, 0.1-1.0, default 0.5)
+- `cg_sketch_min_line_length` (Int, 5-500, default 30)
+
+### LLM 函数 API
+
+已合并到 `dispatch_blender_job` 统一入口：
+
+| functionName | 功能 | 关键参数 |
+|---|---|---|
+| `solve_point_layout` | 坐标点集 → 道路 mesh | `points` (必填), `connections` (可选), `mesh_name` |
+| `extract_sketch_topology` | 草图图像 → 道路 mesh | `image_path` (必填), `method`, `threshold`, `min_line_length` |
+| `clear_road_layout` | 删除当前道路布局 mesh | 无 |
+
+### 成员 B 集成
+
+```python
+from bl_ext.user_default.LLMCityGenerator.dynamics.function_api import dispatch_blender_job
+
+# 手动坐标
+dispatch_blender_job("solve_point_layout", {
+    "points": [[0,0],[50,0],[50,50],[0,50]]
+})
+
+# 草图提取
+dispatch_blender_job("extract_sketch_topology", {
+    "image_path": "C:/path/to/sketch.jpg",
+    "threshold": 0.5,
+    "min_line_length": 30
+})
+```
+
+### 完整联调链（LLM 预期调用）
+
+```
+solve_point_layout({points: [...]})
+  → cg.apply_node_group (Geo Nodes 生成城市)
+  → run_full_simulation({car_density: 15})
+  → 场景完成: 道路 + 建筑 + 车流 + 行人
+```
+
 ## 注册流程
 
 - `register()`: 注册类、定义 Scene 属性并注册帧变化处理器。
 - `unregister()`: 反注册类、移除处理器并删除 Scene 属性。
+
+## 开发工作流
+
+### 插件打包与安装
+
+由于 Blender 5.1 使用扩展系统，插件安装路径为：
+```
+C:\Users\<用户名>\AppData\Roaming\Blender Foundation\Blender\5.1\extensions\user_default\LLMCityGenerator\
+```
+
+开发时的工作流：
+1. 在开发目录 `D:\Software Engineering\code\SE_26Spring\LLMCityGenerator\` 编辑代码
+2. 将 `LLMCityGenerator/` 打包为 `.zip`（排除 `__pycache__`、`.git`、测试文件）
+3. 在 Blender 中：`Edit > Preferences > Add-ons > Install from Disk` 安装 zip
+4. 重启 Blender 或按 `F3` 搜索 `Reload Scripts` 重载
+
+### 外部资产文件
+
+`assets/pedestrians.blend` — 行人模型（来自 Procedural Crowds）。包含两个集合：
+- `people`: 34 个角色 mesh 对象（静态 T-pose）
+- `armatures`: 34 个骨骼对象（行人系统不使用，仅保留以维持模型结构）
+
+插件启动时通过 `_resolve_pedestrian_collection()` 自动加载。
+
+### Blender 控制台测试
+```python
+from bl_ext.user_default.LLMCityGenerator.dynamics.function_api import dispatch_blender_job
+dispatch_blender_job("list_available_models")       # 查看可用模型
+dispatch_blender_job("run_full_simulation", {})      # 启动仿真
+dispatch_blender_job("get_simulation_status")        # 查看状态
+dispatch_blender_job("stop_simulation")              # 停止
+dispatch_blender_job("solve_point_layout", {"points": [[0,0],[50,0],[50,50],[0,50]]})
+```
+
+### 驱动方式（更新）
+**纯 Python 驱动**：汽车、行人、交通灯全部由 `bpy.app.timers` 定时器驱动，不再依赖 Geo Nodes 仿真缓存。
+- **汽车**：`CarManager` 在每条道路车道上生成车辆（linked duplicate），每帧更新位置/旋转
+- **行人**：`PedestrianManager` 从 `assets/pedestrians.blend` 加载角色 mesh，linked duplicate 到人行道上，每帧移动
+- **交通灯**：`TrafficLightManager` 在路口放置信号灯模型，timer 中切换状态

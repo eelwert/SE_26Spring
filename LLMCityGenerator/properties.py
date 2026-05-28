@@ -305,6 +305,46 @@ def _add_dynamics_properties():
     )
 
 
+# --- Layout-related scene properties ---
+
+
+def _add_layout_properties():
+    """Register layout-related scene properties."""
+    bpy.types.Scene.cg_layout_points_text = bpy.props.StringProperty(
+        name="",
+        description="Coordinate points, e.g. 0,0;50,0;50,50;0,50",
+        default="",
+    )
+    bpy.types.Scene.cg_sketch_image_path = bpy.props.StringProperty(
+        name="",
+        description="Path to sketch image file",
+        default="",
+        subtype="FILE_PATH",
+    )
+    bpy.types.Scene.cg_sketch_threshold = bpy.props.FloatProperty(
+        name="Threshold",
+        description="Edge detection threshold",
+        default=0.5,
+        min=0.1,
+        max=1.0,
+    )
+    bpy.types.Scene.cg_sketch_min_line_length = bpy.props.IntProperty(
+        name="Min Length",
+        description="Minimum line length in pixels",
+        default=30,
+        min=5,
+        max=500,
+    )
+
+
+def _remove_layout_properties():
+    """Remove layout-related scene properties."""
+    del bpy.types.Scene.cg_layout_points_text
+    del bpy.types.Scene.cg_sketch_image_path
+    del bpy.types.Scene.cg_sketch_threshold
+    del bpy.types.Scene.cg_sketch_min_line_length
+
+
 def _remove_dynamics_properties():
     """Remove dynamics-related scene properties."""
     del bpy.types.Scene.cg_car_density
@@ -381,6 +421,7 @@ def register_scene_properties():
 
     add_custom_properties()
     _add_dynamics_properties()
+    _add_layout_properties()
     # Note: add_emission_properties() is not called here as in the original code
     # It is defined but never activated in register().
 
@@ -406,3 +447,4 @@ def unregister_scene_properties():
     del bpy.types.Scene.seed
 
     _remove_dynamics_properties()
+    _remove_layout_properties()

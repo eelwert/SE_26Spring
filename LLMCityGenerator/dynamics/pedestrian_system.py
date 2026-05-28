@@ -66,7 +66,7 @@ class PedestrianManager:
                 ped_count = min(ped_count, density)
 
                 for i in range(ped_count):
-                    walk_dir = random.choice([1, -1])
+                    walk_dir = -1
                     offset = random.random()
                     walk_speed = random.uniform(speed * 0.7, speed * 1.3)
 
@@ -135,15 +135,34 @@ class PedestrianManager:
     # ------------------------------------------------------------------
 
     def _make_ped_mesh(self, name, collection, ped_asset_coll=None):
-        """Create a pedestrian object — collection instance or coloured cylinder."""
-        if ped_asset_coll:
-            obj = bpy.data.objects.new(name, None)
-            obj.instance_type = "COLLECTION"
-            obj.instance_collection = ped_asset_coll
-            obj.empty_display_size = 0.5
-            collection.objects.link(obj)
-            return obj
+        """Create a pedestrian — linked duplicate of a random character mesh, or cylinder fallback."""
+        if ped_asset_coll is not None:
+            # ped_asset_coll may be:
+            #   a) a collection whose (recursive) objects include character meshes
+            #   b) a list of sub-collections → randomly pick one and instance it
+            if isinstance(ped_asset_coll, list):
+                char_coll = random.choice(ped_asset_coll)
+                obj = bpy.data.objects.new(name, None)
+                obj.instance_type = "COLLECTION"
+                obj.instance_collection = char_coll
+                obj.empty_display_size = 0.5
+                collection.objects.link(obj)
+                return obj
 
+            # Collection with mesh objects → pick a random mesh, create linked duplicate
+            mesh_objs = [o for o in ped_asset_coll.all_objects if o.type == "MESH"]
+            if mesh_objs:
+                proto = random.choice(mesh_objs)
+                obj = bpy.data.objects.new(name, proto.data)
+                # Copy materials from prototype
+                for mat in proto.data.materials:
+                    if mat and mat.name not in [m.name for m in obj.data.materials]:
+                        obj.data.materials.append(mat)
+                obj.location = (0, 0, 0)
+                collection.objects.link(obj)
+                return obj
+
+        # Fallback: procedural cylinder
         mesh = bpy.data.meshes.new(name + "_mesh")
         verts, faces = [], []
         segs = 8

@@ -53,12 +53,18 @@ class CarManager:
         for road in road_data:
             curve = road["curve"]
             length = road["length"]
+            is_turn = road.get("is_turn", False)
 
-            car_count = max(1, int(length / (DEFAULT_CAR_FOLLOW_DISTANCE * 2)))
-            car_count = min(car_count, car_density)
+            # Fewer cars on turn arcs, one direction only (matching the lane)
+            if is_turn:
+                car_count = max(1, int(length / 10.0))
+                car_count = min(car_count, max(1, car_density // 4))
+            else:
+                car_count = max(1, int(length / (DEFAULT_CAR_FOLLOW_DISTANCE * 2)))
+                car_count = min(car_count, car_density)
 
             for i in range(car_count):
-                direction = 1 if i < car_count / 2 else -1
+                direction = 1  # curve already points in travel direction
                 offset = random.random()
                 speed = random.uniform(speed_min, speed_max)
 
@@ -198,18 +204,19 @@ class CarManager:
         return mat @ pos, mat.to_3x3() @ tangent
 
     @staticmethod
-    def place_on_curve(obj, curve, offset, direction):
+    def place_on_curve(obj, curve, offset, direction=1):
         """Set obj.location / obj.rotation_euler to *offset* on *curve*.
 
-        Car body faces -Y in local space (front wheels are at negative Y);
-        we rotate so local -Y aligns with the curve tangent.
+        Object faces its motion direction.  When *direction* is -1 the curve
+        parameter is ``1 - offset`` (travels end→start) and the tangent is
+        reversed so the model faces the way it is actually moving.
         """
-        pos, tangent = CarManager.eval_curve(curve, offset)
-        obj.location = pos
+        t = offset if direction > 0 else (1.0 - offset)
+        pos, tangent = CarManager.eval_curve(curve, t)
         if direction < 0:
             tangent = -tangent
+        obj.location = pos
         yaw = math.atan2(tangent.y, tangent.x)
-        # +pi/2 so local -Y (car front) faces along the curve tangent
         obj.rotation_euler = (0.0, 0.0, yaw + math.pi / 2)
 
     @staticmethod
