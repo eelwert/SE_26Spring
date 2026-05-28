@@ -13,6 +13,9 @@ from .operators import (
     MESH_OT_delete_Trees_Edge,
     MESH_OT_SetmodernBuildingAttribute,
     MESH_OT_DeleteBuildingAttribute,
+
+    # dA_add
+    CG_OT_Apply_Scene_Template,
 )
 from .panels import (
     CG_PT_Main_Panel,
@@ -30,6 +33,9 @@ from .panels import (
     CG_Building_Roof_Panel,
     CG_Night_Lighting_Panel,
     InteriorPanel,
+
+    # dA_add
+    CG_Template_Panel,
 )
 from .properties import register_scene_properties, unregister_scene_properties
 from .handlers import register_handlers, unregister_handlers
@@ -51,6 +57,11 @@ classes = [
     CG_OT_Apply_Node_Group,
     CG_PT_Main_Panel,
     CG_Setting_Panel,
+
+    # dA_add
+    CG_Template_Panel,
+    CG_OT_Apply_Scene_Template,
+
     CG_General_Setting_Panel,
     CG_Street_Setting_Panel,
     CG_Park_Setting_Panel,

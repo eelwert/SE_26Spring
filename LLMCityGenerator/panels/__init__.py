@@ -15,3 +15,7 @@ from .building_settings import (
     CG_Building_Roof_Panel,
 )
 from .night_lighting import CG_Night_Lighting_Panel, InteriorPanel
+
+
+# dA_add
+from .template_panel import CG_Template_Panel

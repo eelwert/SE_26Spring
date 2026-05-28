@@ -1,5 +1,8 @@
 import bpy
 
+# dA_add
+from .constants import TEMPLATE_ENUM_ITEMS
+
 
 # --- Update callbacks for Scene properties ---
 
@@ -285,6 +288,17 @@ def register_scene_properties():
         update=update_zshape_insert
     )
 
+
+    # dA_add
+    bpy.types.Scene.city_template_id = bpy.props.EnumProperty(
+        name="Scene Template",
+        description="Select a predefined scene template",
+        items=TEMPLATE_ENUM_ITEMS,
+        default="0",
+    )
+
+
+
     add_custom_properties()
     # Note: add_emission_properties() is not called here as in the original code
     # It is defined but never activated in register().
@@ -299,6 +313,10 @@ def unregister_scene_properties():
     del bpy.types.Scene.zshape
     del bpy.types.Scene.zshape_height
     del bpy.types.Scene.zshape_insert
+
+
+    # dA_add
+    del bpy.types.Scene.city_template_id
 
     del bpy.types.Scene.room_seed
     del bpy.types.Scene.close_roller_shutter
