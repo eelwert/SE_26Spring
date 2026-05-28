@@ -193,7 +193,7 @@ class CG_OT_Eco_Generate_Lake(bpy.types.Operator):
         import math
         random.seed(lake_seed)
 
-        # --- Step 1: Create park block using City Generator's park system ---
+        # --- Step 1: Create single park block (1x1, uniform park ground) ---
         bpy.ops.mesh.primitive_grid_add(
             x_subdivisions=1, y_subdivisions=1,
             size=block_size, location=(0, 0, 0))
@@ -210,25 +210,37 @@ class CG_OT_Eco_Generate_Lake(bpy.types.Operator):
         mod = block_obj.modifiers.new(name=node_group_name, type='NODES')
         mod.node_group = bpy.data.node_groups.get(node_group_name)
 
-        # Configure: Buildings OFF, Streets ON (required for parks)
+        # Configure: Buildings OFF, Streets ON (needed for park ground)
         mod["Socket_142"] = False  # Buildings off
         mod["Socket_143"] = True   # Streets on
         mod["Socket_144"] = False  # Traffic off
 
-        # Mark all faces as park
+        # Minimize street footprint, keep only park ground
+        mod["Socket_9"] = 0.01
+        mod["Socket_16"] = 0.0
+        mod["Socket_20"] = 0.0
+        mod["Socket_12"] = 1
+
+        # Disable street tree systems
+        mod["Socket_167"] = 0.0
+        mod["Socket_185"] = 0.0
+        mod["Socket_172"] = 0.0
+
+        # Park paths off (avoid paths through lake area)
+        mod["Socket_154"] = 0       # Path Subdivision
+        # Sparse park trees (1-2 per block)
+        mod["Socket_158"] = 20.0   # Tree Distance Min
+        mod["Socket_159"] = 0.15   # Tree Density Factor
+        mod["Socket_161"] = 0.5
+        mod["Socket_162"] = 1.0
+
+        # Mark single face as park
         mesh = block_obj.data
         if "assign Park" not in mesh.attributes:
             mesh.attributes.new(name="assign Park", type='INT', domain='FACE')
-        for i in range(len(mesh.polygons)):
-            mesh.attributes["assign Park"].data[i].value = 1
+        mesh.attributes["assign Park"].data[0].value = 1
 
-        # Tune park appearance
-        mod["Socket_158"] = 8.0    # Tree Distance Min
-        mod["Socket_159"] = 0.6    # Tree Density Factor
-        mod["Socket_161"] = 0.6    # Min Tree Scale
-        mod["Socket_162"] = 1.2    # Max Tree Scale
-
-        # --- Step 2: Create irregular lake surface ---
+        # --- Step 2: Create irregular lake surface above center ---
         bpy.ops.mesh.primitive_circle_add(
             vertices=lake_vertices,
             radius=lake_size,
@@ -299,7 +311,7 @@ class CG_OT_Eco_Generate_Lake(bpy.types.Operator):
         else:
             lake_obj.data.materials.append(water_mat)
 
-        # --- Step 4: Parent lake to block and select ---
+        # --- Step 4: Parent lake to block ---
         lake_obj.parent = block_obj
 
         bpy.ops.object.mode_set(mode='OBJECT')

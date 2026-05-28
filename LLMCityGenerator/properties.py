@@ -338,7 +338,7 @@ def register_scene_properties():
     bpy.types.Scene.cg_lake_block_size = bpy.props.FloatProperty(
         name="Block Size",
         description="Size of the square ground block containing the lake",
-        default=80.0, min=10.0, max=500.0, subtype='DISTANCE')
+        default=30.0, min=10.0, max=500.0, subtype='DISTANCE')
     bpy.types.Scene.cg_lake_edge_irregularity = bpy.props.FloatProperty(
         name="Edge Irregularity",
         description="Randomness of the lake shoreline (0 = perfect circle, 1 = very irregular)",
