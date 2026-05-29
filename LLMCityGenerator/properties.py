@@ -245,17 +245,17 @@ def _add_dynamics_properties():
     bpy.types.Scene.cg_car_speed_min = bpy.props.FloatProperty(
         name="Min Speed",
         description="Minimum car speed (m/s)",
-        default=5.0,
-        min=1.0,
-        max=50.0,
+        default=2.0,
+        min=0.5,
+        max=20.0,
         update=_dynamics_property_update,
     )
     bpy.types.Scene.cg_car_speed_max = bpy.props.FloatProperty(
         name="Max Speed",
         description="Maximum car speed (m/s)",
-        default=15.0,
+        default=8.0,
         min=1.0,
-        max=50.0,
+        max=25.0,
         update=_dynamics_property_update,
     )
     bpy.types.Scene.cg_pedestrian_density = bpy.props.IntProperty(

@@ -29,7 +29,7 @@ class CG_PT_Dynamics_Panel(bpy.types.Panel):
 
         if sim.active:
             box.label(
-                text=f"Active: {len(sim.car_manager.cars)} cars, "
+                text=f"Active: Geo cars + "
                 f"{len(sim.pedestrian_manager.pedestrians)} peds, "
                 f"{len(sim.traffic_light_manager.traffic_lights)} lights",
                 icon="INFO",

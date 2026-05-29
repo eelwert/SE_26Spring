@@ -1,12 +1,14 @@
-"""Simulation manager — coordinates cars, pedestrians and traffic lights via bpy.app.timers.
+"""Simulation manager — pedestrians + traffic lights via bpy.app.timers.
 
-All three systems are Python-driven.  No Geo Nodes dependency for animation.
+Car traffic is handled by the City Generator Geo Nodes simulation.
 """
 
+import math
 import bpy
+from mathutils import Vector
 from .pedestrian_system import PedestrianManager
 from .traffic_light import TrafficLightManager
-from .car_system import CarManager
+from .car_system import CarManager  # for eval_curve / place_on_curve utilities
 from ..constants import DYNAMICS_COLLECTION_NAME
 
 
@@ -14,7 +16,6 @@ class SimulationManager:
     _instance = None
 
     def __init__(self):
-        self.car_manager = CarManager()
         self.pedestrian_manager = PedestrianManager()
         self.traffic_light_manager = TrafficLightManager()
         self.road_data = []
@@ -43,9 +44,8 @@ class SimulationManager:
     # ------------------------------------------------------------------
 
     def setup(self, mesh_obj, scene=None,
-              enable_cars=True, enable_pedestrians=True, enable_traffic_lights=True,
-              pedestrian_collection=None,
-              car_collection=None, front_wheels_coll=None, back_wheels_coll=None):
+              enable_pedestrians=True, enable_traffic_lights=True,
+              pedestrian_collection=None):
         from .road_analyzer import RoadAnalyzer
 
         if scene is None:
@@ -56,16 +56,6 @@ class SimulationManager:
         if not self.road_data:
             return False
 
-        if enable_cars:
-            self.car_manager.spawn_cars(
-                road_data=self.road_data,
-                car_collection=car_collection,
-                front_wheels_coll=front_wheels_coll,
-                back_wheels_coll=back_wheels_coll,
-                car_density=scene.cg_car_density,
-                speed_min=scene.cg_car_speed_min,
-                speed_max=scene.cg_car_speed_max,
-            )
         if enable_pedestrians:
             self.pedestrian_manager.spawn_pedestrians(
                 road_data=self.road_data,
@@ -110,129 +100,53 @@ class SimulationManager:
             return 1.0 / 30.0
 
         self.traffic_light_manager.update_cycle(scene)
-
-        # Drive cars
-        self._drive_vehicles(
-            vehicles=self.car_manager.cars,
-            dt=dt,
-            traffic_manager=self.traffic_light_manager,
-            stopped_key="cg.car_stopped",
-            edge_key="cg.car_edge_id",
-            curve_length_key="cg.car_curve_length",
-        )
-
-        # Drive pedestrians
-        self._drive_vehicles(
-            vehicles=self.pedestrian_manager.pedestrians,
-            dt=dt,
-            traffic_manager=self.traffic_light_manager,
-            stopped_key="cg.ped_stopped",
-            edge_key="cg.ped_edge_id",
-            curve_length_key="cg.ped_curve_length",
-        )
-
+        self._drive_pedestrians(dt)
         bpy.context.view_layer.update()
         return 1.0 / 30.0
 
     # ------------------------------------------------------------------
-    # Shared advance logic
+    # Pedestrian movement
     # ------------------------------------------------------------------
 
-    def _drive_vehicles(self, vehicles, dt, traffic_manager, stopped_key, edge_key,
-                        curve_length_key="cg.ped_curve_length"):
-        is_pedestrian = (curve_length_key == "cg.ped_curve_length")
-
-        # --- group vehicles by curve for car-following / spacing ---
-        by_curve = {}
-        for vdata in vehicles:
-            c = vdata["curve"]
-            by_curve.setdefault(c, []).append(vdata)
-        for group in by_curve.values():
-            group.sort(key=lambda v: v["offset"])  # ascending offset
-
-        for vdata in vehicles:
+    def _drive_pedestrians(self, dt):
+        for vdata in self.pedestrian_manager.pedestrians:
             obj = vdata["obj"]
             curve = vdata["curve"]
             speed = vdata["speed"]
             offset = vdata["offset"]
             direction = vdata.get("direction", 1)
 
-            curve_length = obj.get(curve_length_key, 1.0)
+            curve_length = obj.get("cg.ped_curve_length", 1.0)
             if curve_length <= 0:
                 continue
 
             # --- traffic light (only near end of path) ---
-            edge_id = obj.get(edge_key)
+            edge_id = obj.get("cg.ped_edge_id")
             eff_speed = speed
-
-            # --- car-following: don't overtake the vehicle ahead ---
-            if not is_pedestrian:
-                group = by_curve.get(curve)
-                if group:
-                    idx = group.index(vdata)
-                    if idx < len(group) - 1:
-                        ahead = group[idx + 1]
-                        gap = ahead["offset"] - offset
-                        if gap < 0:
-                            gap += 1.0  # wrap around
-                        # minimum gap ~ car length + buffer (≈ 5% of curve)
-                        min_gap = max(0.03, (speed * 0.15) / curve_length)
-                        if gap < min_gap:
-                            eff_speed = ahead.get("eff_speed", eff_speed)
-                            if gap < 0.01:
-                                eff_speed = 0  # too close, stop
-
             if edge_id is not None and edge_id >= 0 and offset > 0.7:
-                state = traffic_manager.get_light_state_at_edge(edge_id)
+                state = self.traffic_light_manager.get_light_state_at_edge(edge_id)
                 if state == "RED":
-                    obj[stopped_key] = True
-                    if is_pedestrian:
-                        _place_pedestrian(obj, curve, offset, direction)
-                    else:
-                        CarManager.place_on_curve(obj, curve, offset, direction)
-                    vdata["eff_speed"] = 0
+                    obj["cg.ped_stopped"] = True
+                    _place_pedestrian(obj, curve, offset, direction)
                     continue
                 elif state == "YELLOW":
-                    obj[stopped_key] = False
+                    obj["cg.ped_stopped"] = False
                     eff_speed *= 0.3
                 else:
-                    obj[stopped_key] = False
+                    obj["cg.ped_stopped"] = False
 
             delta = (eff_speed * dt) / curve_length
             offset += delta
             offset %= 1.0
             vdata["offset"] = offset
-            vdata["eff_speed"] = eff_speed
-
-            if is_pedestrian:
-                _place_pedestrian(obj, curve, offset, direction)
-            else:
-                CarManager.place_on_curve(obj, curve, offset, direction)
+            _place_pedestrian(obj, curve, offset, direction)
 
     # ------------------------------------------------------------------
     # Cleanup
     # ------------------------------------------------------------------
 
-import math as _math
-from mathutils import Vector as _Vector
-
-def _place_pedestrian(obj, curve, offset, direction=1):
-    """Place a pedestrian on *curve* — same logic as CarManager.place_on_curve
-    but uses the opposite local-forward convention (+Y instead of -Y).
-    """
-    t = offset if direction > 0 else (1.0 - offset)
-    pos, tangent = CarManager.eval_curve(curve, t)
-    if direction < 0:
-        tangent = -tangent
-    obj.location = pos
-    yaw = _math.atan2(tangent.y, tangent.x)
-    # +Y faces motion direction (car convention is -Y)
-    obj.rotation_euler = (0.0, 0.0, yaw - _math.pi / 2)
-
     def cleanup(self):
         self.active = False
-
-        self.car_manager.cleanup_cars()
         self.pedestrian_manager.cleanup_pedestrians()
         self.traffic_light_manager.cleanup_lights()
 
@@ -249,3 +163,21 @@ def _place_pedestrian(obj, curve, offset, direction=1):
         scene = bpy.context.scene
         if hasattr(scene, "cg_dynamics_active"):
             scene.cg_dynamics_active = False
+
+
+# ------------------------------------------------------------------
+# Pedestrian-specific curve placement (+Y forward convention)
+# ------------------------------------------------------------------
+
+def _place_pedestrian(obj, curve, offset, direction=1):
+    """Place a pedestrian on *curve* facing the direction of motion.
+
+    Uses ``yaw - pi/2`` because pedestrian models face +Y (cars face -Y).
+    """
+    t = offset if direction > 0 else (1.0 - offset)
+    pos, tangent = CarManager.eval_curve(curve, t)
+    if direction < 0:
+        tangent = -tangent
+    obj.location = pos
+    yaw = math.atan2(tangent.y, tangent.x)
+    obj.rotation_euler = (0.0, 0.0, yaw - math.pi / 2)

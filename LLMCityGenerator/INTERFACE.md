@@ -197,7 +197,8 @@ dynamics/
 - `CG_PT_Dynamics_Panel`（`CG_Setting_panel` 子面板）
   - 标题: "Dynamic Simulation"，默认折叠
   - 按钮: Add Dynamic Elements / Remove Dynamic Elements
-  - 车辆参数: Car Density (0-200), Min Speed (1-50 m/s), Max Speed (1-50 m/s)
+  - **Add Dynamic Elements** 内部调用原插件 `CG_Traffic_Sim_Panel` 的 Geo Nodes 仿真（配置 Socket_89–109 + Bake）处理汽车路径与运动，同时启动 Python 驱动的行人 + 交通灯系统
+  - 车辆参数: Car Density（映射到 Geo Nodes `Socket_90`）, Min Speed（`Socket_98`）, Max Speed（`Socket_99`）
   - 行人参数: Pedestrian Density (0-200), Walking Speed (0.5-5 m/s)
   - 交通灯参数: Green Duration (30-600 frames), Yellow Duration (10-120), Red Duration (30-600)
 
@@ -365,11 +366,16 @@ dispatch_blender_job("extract_sketch_topology", {
 ### 完整联调链（LLM 预期调用）
 
 ```
-solve_point_layout({points: [...]})
-  → cg.apply_node_group (Geo Nodes 生成城市)
-  → run_full_simulation({car_density: 15})
-  → 场景完成: 道路 + 建筑 + 车流 + 行人
+1. 创建 mesh（Grid / solve_point_layout / extract_sketch_topology）
+2. cg.import_node_group    → 导入 Geo Nodes 节点组与资产
+3. cg.apply_node_group     → 向 mesh 添加 City_Generator_2.0 修改器（生成建筑/道路）
+4. run_full_simulation()   → 配置 Geo Nodes 交通 Socket + Bake → 车辆出现
+                           → 同时启动 Python 行人 + 交通灯
+   - car_density: 映射到 Geo Nodes Socket_90（需 Remove → 调参 → Add 来动态修改）
+   - pedestrian_density: 仅在 Add 时生效
 ```
+
+**注意**：必须先 Apply Node Group 才能看到汽车（需要 `City_Generator_2.0` 修改器）。密度参数仅在点击 Add Dynamic Elements 时读取当前滑条值。
 
 ## 注册流程
 
@@ -410,7 +416,8 @@ dispatch_blender_job("solve_point_layout", {"points": [[0,0],[50,0],[50,50],[0,5
 ```
 
 ### 驱动方式（更新）
-**纯 Python 驱动**：汽车、行人、交通灯全部由 `bpy.app.timers` 定时器驱动，不再依赖 Geo Nodes 仿真缓存。
-- **汽车**：`CarManager` 在每条道路车道上生成车辆（linked duplicate），每帧更新位置/旋转
-- **行人**：`PedestrianManager` 从 `assets/pedestrians.blend` 加载角色 mesh，linked duplicate 到人行道上，每帧移动
-- **交通灯**：`TrafficLightManager` 在路口放置信号灯模型，timer 中切换状态
+
+**混合架构**：
+- **汽车**：调用原插件 City Generator 的 Geo Nodes 仿真（Socket_89–109），通过 `_configure_geo_traffic()` 配置参数 → `bpy.ops.object.simulation_nodes_cache_calculate_to_frame` 触发路径生成与车辆移动。转弯、跟车、碰撞均由 Geo Nodes 原生处理。
+- **行人**：`PedestrianManager` 从 `assets/pedestrians.blend` 加载角色 mesh（Procedural Crowds），linked duplicate 到人行道偏移曲线上，`bpy.app.timers` 每帧更新位置。
+- **交通灯**：`TrafficLightManager` 从 mesh 顶点检测路口（≥2 条边），放置信号灯模型，timer 中按周期切换 GREEN/YELLOW/RED 状态，存储在 `cg.tl_state` 属性上。所有路口共用同一相位。

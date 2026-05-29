@@ -39,37 +39,108 @@ _LAYOUT_HANDLERS = {
 
 
 # ---------------------------------------------------------------------------
+# Geo Nodes helpers
+# ---------------------------------------------------------------------------
+
+def _get_city_modifier(mesh_obj=None):
+    """Return the City_Generator_2.0 modifier on *mesh_obj*, or None."""
+    if mesh_obj is None:
+        mesh_obj = bpy.context.object
+    if mesh_obj is None:
+        return None
+    return mesh_obj.modifiers.get("City_Generator_2.0")
+
+
+def _set_socket(mod, socket_id, value):
+    """Safely set a Geo Nodes modifier socket."""
+    if socket_id in mod:
+        mod[socket_id] = value
+
+
+def _configure_geo_traffic(params, mesh_obj=None):
+    """Apply traffic-related parameter overrides to the Geo Nodes modifier."""
+    mod = _get_city_modifier(mesh_obj)
+    if mod is None:
+        return None
+
+    scene = bpy.context.scene
+    fps = max(scene.render.fps, 1)
+
+    socket_map = {
+        "car_density":      ("Socket_90", int),
+        "speed_min":        ("Socket_98", float),
+        "speed_max":        ("Socket_99", float),
+        "car_distance_min": ("Socket_94", float),
+        "delete_prob":      ("Socket_96", float),
+    }
+    for param_key, (socket_id, cast) in socket_map.items():
+        if param_key in params:
+            val = cast(params[param_key])
+            if socket_id in ("Socket_98", "Socket_99"):
+                val = val / fps  # m/s → m/frame for sim nodes
+            _set_socket(mod, socket_id, val)
+
+    # Enable traffic
+    _set_socket(mod, "Socket_144", True)
+    return mod
+
+
+def _bake_simulation(mod):
+    """Delete old cache then recalculate — mirrors Traffic Simulation panel workflow."""
+    try:
+        obj = mod.id_data
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+        # 1. Delete old cache so new socket values take effect
+        bpy.ops.object.simulation_nodes_cache_delete(selected=True)
+        # 2. Recalculate to current frame
+        obj.update_tag()
+        bpy.context.view_layer.update()
+        bpy.ops.object.simulation_nodes_cache_calculate_to_frame(selected=True)
+        return True
+    except Exception as e:
+        print(f"[CityGen] Bake failed: {e}")
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Model helpers
 # ---------------------------------------------------------------------------
 
-def _resolve_car_assets():
-    """Load car body, front wheels and back wheels collections from the blend file.
+def _resolve_car_collections():
+    """Return (body, front_wheels, back_wheels, car_lights) from the blend file."""
+    body = None
+    front = None
+    back = None
+    lights = None
 
-    Returns (car_body_coll, front_wheels_coll, back_wheels_coll) or (None, None, None).
-    """
-    body_names = ("car model", "Car Assets", "car light")
-    front_names = ("front wheels", "front wheel")
-    back_names = ("back wheels", "back wheel")
+    for name in ("car model", "Car Assets", "car light"):
+        body = bpy.data.collections.get(name)
+        if body:
+            break
+    if body is None:
+        body = _import_collection("car model")
 
-    def _find_or_load(names):
-        for n in names:
-            coll = bpy.data.collections.get(n)
-            if coll:
-                return coll
-        return _import_collection(names[0])
+    for name in ("front wheels", "front wheel"):
+        front = bpy.data.collections.get(name)
+        if front:
+            break
+    if front is None:
+        front = _import_collection("front wheels")
 
-    body = _find_or_load(body_names)
-    front = _find_or_load(front_names)
-    back = _find_or_load(back_names)
+    for name in ("back wheels", "back wheel"):
+        back = bpy.data.collections.get(name)
+        if back:
+            break
+    if back is None:
+        back = _import_collection("back wheels")
 
-    if body:
-        print(f"[CityGen] Car body: '{body.name}'")
-    if front:
-        print(f"[CityGen] Front wheels: '{front.name}'")
-    if back:
-        print(f"[CityGen] Back wheels: '{back.name}'")
+    for name in ("car light", "car lights", "Car Lights"):
+        lights = bpy.data.collections.get(name)
+        if lights:
+            break
 
-    return body, front, back
+    return body, front, back, lights
 
 
 def _resolve_pedestrian_collection():
@@ -226,20 +297,26 @@ def run_traffic_simulation(mesh_obj=None, params=None):
     if mesh_obj is None:
         return {"success": False, "message": "No mesh object selected"}
 
-    mod = _configure_geo_traffic(params)
+    mod = _configure_geo_traffic(params, mesh_obj=mesh_obj)
     if mod is None:
-        return {"success": False, "message": "City_Generator_2.0 modifier not found — run Import City Generator first"}
+        return {"success": False, "message": "City_Generator_2.0 modifier not found — run Import City Generator and Apply Node Group first"}
 
-    # Set car model collection on the Geo Nodes socket
-    car_coll = _resolve_car_collection()
-    if car_coll:
-        _set_socket(mod, "Socket_102", car_coll.name)
+    # Load and assign car asset collections (mirrors Traffic Simulation panel)
+    body, front_w, back_w, lights = _resolve_car_collections()
+    if body:
+        mod["Socket_102"] = body
+    if front_w:
+        mod["Socket_103"] = front_w
+    if back_w:
+        mod["Socket_104"] = back_w
+    if lights:
+        mod["Socket_105"] = lights
 
     baked = _bake_simulation(mod)
 
     return {
         "success": True,
-        "data": {"car_model": car_coll.name if car_coll else "default", "baked": baked},
+        "data": {"car_model": body.name if body else "default", "baked": baked},
         "message": f"Geo Nodes traffic configured (bake: {'OK' if baked else 'manual bake needed'})",
     }
 
@@ -276,7 +353,7 @@ def run_crowd_simulation(mesh_obj=None, params=None):
 
 
 def run_full_simulation(mesh_obj=None, params=None):
-    """Start Python-driven cars + pedestrians + traffic lights."""
+    """Start Geo Nodes car traffic + Python pedestrians + traffic lights."""
     params = params or {}
     mesh_obj = _resolve_mesh(mesh_obj)
     if mesh_obj is None:
@@ -286,9 +363,6 @@ def run_full_simulation(mesh_obj=None, params=None):
 
     # ---- scene property overrides ----
     overrides = {
-        "car_density":        ("cg_car_density", int),
-        "speed_min":          ("cg_car_speed_min", float),
-        "speed_max":          ("cg_car_speed_max", float),
         "pedestrian_density": ("cg_pedestrian_density", int),
         "walking_speed":      ("cg_pedestrian_speed", float),
         "green_duration":     ("cg_traffic_light_green", int),
@@ -299,10 +373,23 @@ def run_full_simulation(mesh_obj=None, params=None):
         if key in params:
             setattr(scene, attr, cast(params[key]))
 
-    # ---- car assets ----
-    car_body, front_w, back_w = _resolve_car_assets()
+    # ---- cars via Geo Nodes ----
+    mod = _configure_geo_traffic(params, mesh_obj=mesh_obj)
+    if mod is None:
+        return {"success": False, "message": "City_Generator_2.0 modifier not found — run Import City Generator and Apply Node Group first"}
 
-    # ---- pedestrians ----
+    body, front_w, back_w, lights = _resolve_car_collections()
+    if body:
+        mod["Socket_102"] = body
+    if front_w:
+        mod["Socket_103"] = front_w
+    if back_w:
+        mod["Socket_104"] = back_w
+    if lights:
+        mod["Socket_105"] = lights
+    baked = _bake_simulation(mod)
+
+    # ---- pedestrians + traffic lights via Python ----
     ped_coll = _resolve_pedestrian_collection()
 
     sim = SimulationManager.get_instance()
@@ -310,20 +397,21 @@ def run_full_simulation(mesh_obj=None, params=None):
         return {"success": False, "message": "Simulation already active — call stop_simulation() first"}
 
     sim.setup(mesh_obj, scene=scene,
-              enable_cars=True, enable_pedestrians=True, enable_traffic_lights=True,
-              car_collection=car_body, front_wheels_coll=front_w, back_wheels_coll=back_w,
+              enable_pedestrians=True,
+              enable_traffic_lights=True,
               pedestrian_collection=ped_coll)
 
     return {
         "success": True,
         "data": {
-            "car_count": len(sim.car_manager.cars),
             "pedestrian_count": len(sim.pedestrian_manager.pedestrians),
             "traffic_light_count": len(sim.traffic_light_manager.traffic_lights),
             "road_count": len(sim.road_data),
+            "car_model": body.name if body else "default",
+            "geo_baked": baked,
         },
         "message": (
-            f"{len(sim.car_manager.cars)} cars, "
+            f"Geo cars (bake: {'OK' if baked else 'manual'}), "
             f"{len(sim.pedestrian_manager.pedestrians)} pedestrians, "
             f"{len(sim.traffic_light_manager.traffic_lights)} traffic lights"
         ),
@@ -336,12 +424,22 @@ def stop_simulation(params=None):
     if not sim.active:
         return {"success": False, "message": "No simulation active"}
 
-    car_n = len(sim.car_manager.cars)
     ped_n = len(sim.pedestrian_manager.pedestrians)
     light_n = len(sim.traffic_light_manager.traffic_lights)
     SimulationManager.reset_instance()
 
-    return {"success": True, "message": f"Stopped — removed {car_n} cars, {ped_n} pedestrians, {light_n} lights"}
+    # Also delete Geo Nodes simulation cache
+    mod = _get_city_modifier()  # uses bpy.context.object (convenience)
+    if mod:
+        try:
+            obj = mod.id_data
+            bpy.context.view_layer.objects.active = obj
+            obj.select_set(True)
+            bpy.ops.object.simulation_nodes_cache_delete(selected=True)
+        except Exception:
+            pass
+
+    return {"success": True, "message": f"Stopped — removed {ped_n} pedestrians, {light_n} lights"}
 
 
 def set_traffic_light_timing(params=None):
@@ -363,7 +461,7 @@ def set_car_model(params=None):
     mod = _get_city_modifier()
     if mod is None:
         return {"success": False, "message": "No City_Generator_2.0 modifier found"}
-    _set_socket(mod, "Socket_102", params["collection"])
+    mod["Socket_102"] = bpy.data.collections.get(params["collection"])
     return {"success": True, "message": f"Car model socket set to '{params['collection']}'"}
 
 
@@ -400,14 +498,15 @@ def list_available_models(params=None):
 def get_simulation_status(params=None):
     """Return current state."""
     sim = SimulationManager.get_instance()
+    mod = _get_city_modifier()
     return {
         "success": True,
         "data": {
             "active": sim.active,
-            "car_count": len(sim.car_manager.cars),
             "pedestrian_count": len(sim.pedestrian_manager.pedestrians),
             "traffic_light_count": len(sim.traffic_light_manager.traffic_lights),
             "road_count": len(sim.road_data),
+            "has_geo_cars": mod is not None,
         },
     }
 

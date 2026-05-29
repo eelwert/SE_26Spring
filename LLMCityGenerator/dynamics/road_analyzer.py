@@ -102,8 +102,7 @@ class RoadAnalyzer:
             vert_to_edges[edge.vertices[1]].append(bwd_entry)
             vert_to_edges[edge.vertices[0]].append(bwd_entry)
 
-        # ---- 2. Turn arcs at intersection vertices (DISABLED — cause overlap) ----
-        return road_data
+        # ---- 2. Turn arcs at intersection vertices ----
         turn_count = 0
         for v_idx, lane_list in vert_to_edges.items():
             pos = matrix @ vertices[v_idx].co
