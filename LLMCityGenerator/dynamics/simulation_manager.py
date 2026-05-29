@@ -141,6 +141,15 @@ class SimulationManager:
     def _drive_vehicles(self, vehicles, dt, traffic_manager, stopped_key, edge_key,
                         curve_length_key="cg.ped_curve_length"):
         is_pedestrian = (curve_length_key == "cg.ped_curve_length")
+
+        # --- group vehicles by curve for car-following / spacing ---
+        by_curve = {}
+        for vdata in vehicles:
+            c = vdata["curve"]
+            by_curve.setdefault(c, []).append(vdata)
+        for group in by_curve.values():
+            group.sort(key=lambda v: v["offset"])  # ascending offset
+
         for vdata in vehicles:
             obj = vdata["obj"]
             curve = vdata["curve"]
@@ -155,6 +164,24 @@ class SimulationManager:
             # --- traffic light (only near end of path) ---
             edge_id = obj.get(edge_key)
             eff_speed = speed
+
+            # --- car-following: don't overtake the vehicle ahead ---
+            if not is_pedestrian:
+                group = by_curve.get(curve)
+                if group:
+                    idx = group.index(vdata)
+                    if idx < len(group) - 1:
+                        ahead = group[idx + 1]
+                        gap = ahead["offset"] - offset
+                        if gap < 0:
+                            gap += 1.0  # wrap around
+                        # minimum gap ~ car length + buffer (≈ 5% of curve)
+                        min_gap = max(0.03, (speed * 0.15) / curve_length)
+                        if gap < min_gap:
+                            eff_speed = ahead.get("eff_speed", eff_speed)
+                            if gap < 0.01:
+                                eff_speed = 0  # too close, stop
+
             if edge_id is not None and edge_id >= 0 and offset > 0.7:
                 state = traffic_manager.get_light_state_at_edge(edge_id)
                 if state == "RED":
@@ -163,6 +190,7 @@ class SimulationManager:
                         _place_pedestrian(obj, curve, offset, direction)
                     else:
                         CarManager.place_on_curve(obj, curve, offset, direction)
+                    vdata["eff_speed"] = 0
                     continue
                 elif state == "YELLOW":
                     obj[stopped_key] = False
@@ -174,6 +202,7 @@ class SimulationManager:
             offset += delta
             offset %= 1.0
             vdata["offset"] = offset
+            vdata["eff_speed"] = eff_speed
 
             if is_pedestrian:
                 _place_pedestrian(obj, curve, offset, direction)

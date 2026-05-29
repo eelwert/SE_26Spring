@@ -47,8 +47,7 @@ class TrafficLightManager:
         intersections = self._find_intersections(road_data)
 
         for idx, (position, connected_edges) in enumerate(intersections.items()):
-            phase_offset = 0 if idx % 2 == 0 else green + yellow
-
+            phase_offset = 0  # all intersections share the same cycle
             for edge_idx in connected_edges:
                 light_name = f"TrafficLight_I{idx}_E{edge_idx}"
                 root = self._create_light_object(light_name, position, lights_coll)
@@ -76,6 +75,25 @@ class TrafficLightManager:
     # Intersection detection
     # ------------------------------------------------------------------
 
+    def _find_intersections_from_mesh(self, mesh_obj):
+        """Find intersections directly from the mesh — vertex = intersection
+        if it has ≥2 edges.  Uses world-space vertex positions."""
+        mesh = mesh_obj.data
+        matrix = mesh_obj.matrix_world
+        vertex_to_edges = defaultdict(list)
+        for edge_idx, edge in enumerate(mesh.edges):
+            for vi in edge.vertices:
+                vertex_to_edges[vi].append(edge_idx)
+
+        intersections = {}
+        for vi, edge_list in vertex_to_edges.items():
+            unique_edges = list(set(edge_list))
+            if len(unique_edges) >= 2:
+                pos = matrix @ mesh.vertices[vi].co
+                pos.freeze()
+                intersections[pos] = unique_edges
+        return intersections
+
     def _find_intersections(self, road_data):
         vertex_to_edges = defaultdict(list)
 
@@ -102,12 +120,13 @@ class TrafficLightManager:
     # ------------------------------------------------------------------
 
     def _create_light_object(self, name, position, collection):
-        """Place a traffic-light model + a small indicator sphere on top."""
-        # --- model (original, no material hack) ---
+        """Place a traffic-light model from the blend-file collection."""
         tl_coll = self._load_traffic_light_collection()
         root = bpy.data.objects.new(name, None)
-        root.empty_display_type = "PLAIN_AXES"
-        root.empty_display_size = 0.5
+        root.empty_display_type = "CUBE"
+        root.empty_display_size = 0.02
+        root.hide_viewport = True
+        root.hide_render = True
         root.location = position
         collection.objects.link(root)
 
@@ -117,7 +136,8 @@ class TrafficLightManager:
                     continue
                 child = bpy.data.objects.new(name + "_" + proto.name, proto.data)
                 child.parent = root
-                child.matrix_world = root.matrix_world @ proto.matrix_local
+                child.location = (0, 0, 0)
+                child.rotation_euler = (0, 0, 0)
                 collection.objects.link(child)
 
         return root
