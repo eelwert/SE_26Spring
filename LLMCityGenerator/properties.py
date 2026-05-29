@@ -224,10 +224,81 @@ def add_custom_properties():
     )
 
 
+# --- LLM result line PropertyGroup ---
+
+class CG_LLMResultLine(bpy.types.PropertyGroup):
+    text: bpy.props.StringProperty(name="Line", default="")
+
+
+# --- LLM properties ---
+
+def _update_llm_text(self, context):
+    """Placeholder update callback for llm_text_input."""
+
+
 # --- Scene property registration (called from register) ---
 
 def register_scene_properties():
     """Register all bpy.types.Scene custom properties."""
+
+    # LLM control properties
+    bpy.types.Scene.llm_text_input = bpy.props.StringProperty(
+        name="Instruction",
+        description="Describe the city scene changes you want in natural language",
+        default="",
+        update=_update_llm_text,
+    )
+    bpy.types.Scene.llm_api_key = bpy.props.StringProperty(
+        name="API Key",
+        description="DeepSeek API Key (or set DEEPSEEK_API_KEY environment variable)",
+        default="",
+        subtype='PASSWORD',
+    )
+    bpy.types.Scene.llm_result = bpy.props.StringProperty(
+        name="LLM Result",
+        description="Result of the last LLM execution",
+        default="",
+    )
+    bpy.types.Scene.llm_status = bpy.props.StringProperty(
+        name="LLM Status",
+        description="Status of the LLM execution (idle/calling/executing/done/error)",
+        default="idle",
+    )
+    bpy.types.Scene.llm_template_id = bpy.props.IntProperty(
+        name="Template ID",
+        description="Last applied template ID",
+        default=0,
+        min=0,
+        max=9,
+    )
+    bpy.types.Scene.llm_template_name = bpy.props.StringProperty(
+        name="Template Name",
+        description="Name of the last applied template",
+        default="",
+    )
+    bpy.types.Scene.llm_weather = bpy.props.StringProperty(
+        name="LLM Weather",
+        description="Weather set by LLM",
+        default="晴",
+    )
+    bpy.types.Scene.llm_time_of_day = bpy.props.StringProperty(
+        name="LLM Time of Day",
+        description="Time of day set by LLM",
+        default="12:00",
+    )
+    bpy.types.Scene.llm_result_lines = bpy.props.CollectionProperty(
+        type=CG_LLMResultLine,
+    )
+    bpy.types.Scene.llm_result_index = bpy.props.IntProperty(
+        name="Result Index",
+        default=0,
+    )
+    bpy.types.Scene.llm_show_examples = bpy.props.BoolProperty(
+        name="Show Examples",
+        description="Toggle quick example buttons",
+        default=False,
+    )
+
     bpy.types.Scene.height_value = bpy.props.IntProperty(
         name="Height Value",
         default=0,
@@ -292,6 +363,19 @@ def register_scene_properties():
 
 def unregister_scene_properties():
     """Delete all bpy.types.Scene custom properties."""
+    # LLM properties
+    del bpy.types.Scene.llm_text_input
+    del bpy.types.Scene.llm_api_key
+    del bpy.types.Scene.llm_result
+    del bpy.types.Scene.llm_status
+    del bpy.types.Scene.llm_template_id
+    del bpy.types.Scene.llm_template_name
+    del bpy.types.Scene.llm_weather
+    del bpy.types.Scene.llm_time_of_day
+    del bpy.types.Scene.llm_result_lines
+    del bpy.types.Scene.llm_result_index
+    del bpy.types.Scene.llm_show_examples
+
     del bpy.types.Scene.height_value
     del bpy.types.Scene.custom_facade_asset_index
     del bpy.types.Scene.custom_ground_asset

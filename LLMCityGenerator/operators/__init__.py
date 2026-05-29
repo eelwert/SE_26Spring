@@ -13,3 +13,4 @@ from .mesh_attributes import (
     MESH_OT_SetmodernBuildingAttribute,
     MESH_OT_DeleteBuildingAttribute,
 )
+from .llm_ops import CG_OT_ExecuteLLMCommand, CG_OT_ClearLLMResult

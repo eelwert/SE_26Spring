@@ -63,6 +63,7 @@ main                          # 稳定版本
 ### 成员 A：资产扩充 + 场景模板化（任务 4+5+6）
 
 涉及文件：
+
 - `LLMCityGenerator/panels/asset_panel.py`（新建：资产替换面板）
 - `LLMCityGenerator/panels/template_panel.py`（新建：模板选择面板）
 - `LLMCityGenerator/operators/asset_ops.py`（新建：资产加载/替换操作符）
@@ -80,6 +81,7 @@ main                          # 稳定版本
 ### 成员 B：LLM 自然语言控制（任务 7）
 
 涉及文件：
+
 - `LLMCityGenerator/panels/llm_panel.py`（新建：自然语言输入面板）
 - `LLMCityGenerator/operators/llm_ops.py`（新建：LLM 调用 Operator）
 - `LLMCityGenerator/llm_service.py`（新建：大模型 API 调用 + JSON 解析）
@@ -87,6 +89,8 @@ main                          # 稳定版本
 - 可选：`src/services/api/realApi.ts`（前端真实 API 客户端，如需对接前端）
 
 开发步骤：
+
+用户在插件界面输入模板编号，系统自动批量配置多项场景参数（如树木类型、道路纹理、路边座椅类型），模板数据以字典形式硬编码在插件代码中
 
 1. LLM API 调用：封装大模型 API（DeepSeek/智谱等），发送 System Prompt（描述可用的 Blender 操作函数）+ User Prompt（用户自然语言指令），返回函数调用 JSON。
 2. 函数注册表：维护一个字典，将功能名称（如 `set_trees`、`change_weather`、`set_road_width`）映射到对应的插件内部执行函数。每个函数明确其参数 Schema。
@@ -98,6 +102,7 @@ main                          # 稳定版本
 ### 成员 C：生态化场景元素（任务 9）
 
 涉及文件：
+
 - `LLMCityGenerator/panels/eco_panel.py`（新建：生态元素面板）
 - `LLMCityGenerator/operators/eco_ops.py`（新建：地形/湖泊/河流操作符）
 - `LLMCityGenerator/properties.py`（追加：生态相关场景属性）
@@ -114,6 +119,7 @@ main                          # 稳定版本
 ### 成员 D：交通模拟 + 布局控制（任务 8+10）
 
 涉及文件：
+
 - `LLMCityGenerator/panels/traffic_control_panel.py`（新建或扩展）
 - `LLMCityGenerator/panels/layout_panel.py`（新建：布局控制面板）
 - `LLMCityGenerator/operators/traffic_ops.py`（新建：交通元素操作符）
@@ -135,6 +141,7 @@ main                          # 稳定版本
 当前前端使用 mock 数据，需要一个真实的控制平面连接前端和 Blender 插件。
 
 新建目录 `backend/`，包含以下文件：
+
 - `server.py`（FastAPI/Flask 主应用）
 - `routes/`（API 路由，对应前端 18 个 API 方法）
 - `blender_client.py`（通过 Blender Python API 或 CLI 驱动插件操作）
@@ -158,17 +165,18 @@ main                          # 稳定版本
 
 ## 风险与应对
 
-| 风险 | 应对 |
-|------|------|
-| 四人同时编辑同一文件导致合并冲突 | Phase 0 完成模块化拆分，每人编辑独立文件 |
-| Blender API 不熟悉 | 每人先花半天研读现有 `__init__.py` 中同类功能的实现模式 |
-| LLM API 调用不稳定 | 成员 B 先对接 API 确认可用性；其他成员函数注册表接口尽量简单 |
-| Blender 环境不一致 | 统一使用 Blender 4.3.0，`.blend` 资源文件通过 Git LFS 同步 |
-| 功能间接口不匹配 | Phase 2 启动时成员 B 发布插件函数注册规范文档，各成员按规范暴露接口 |
+| 风险               | 应对                                            |
+| ---------------- | --------------------------------------------- |
+| 四人同时编辑同一文件导致合并冲突 | Phase 0 完成模块化拆分，每人编辑独立文件                      |
+| Blender API 不熟悉  | 每人先花半天研读现有 `__init__.py` 中同类功能的实现模式           |
+| LLM API 调用不稳定    | 成员 B 先对接 API 确认可用性；其他成员函数注册表接口尽量简单            |
+| Blender 环境不一致    | 统一使用 Blender 4.3.0，`.blend` 资源文件通过 Git LFS 同步 |
+| 功能间接口不匹配         | Phase 2 启动时成员 B 发布插件函数注册规范文档，各成员按规范暴露接口       |
 
 ## 验证方式
 
 由于没有自动化测试，采用手动验证清单：
+
 - 插件在 Blender 4.3.0 中可正常启用，无报错
 - 所有新增面板在 City Generator 侧边栏可见
 - 各功能执行后场景发生预期变化（地形生成、水面出现、船只移动等）

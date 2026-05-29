@@ -13,6 +13,8 @@ from .operators import (
     MESH_OT_delete_Trees_Edge,
     MESH_OT_SetmodernBuildingAttribute,
     MESH_OT_DeleteBuildingAttribute,
+    CG_OT_ExecuteLLMCommand,
+    CG_OT_ClearLLMResult,
 )
 from .panels import (
     CG_PT_Main_Panel,
@@ -30,8 +32,11 @@ from .panels import (
     CG_Building_Roof_Panel,
     CG_Night_Lighting_Panel,
     InteriorPanel,
+    CG_UL_LLMResultList,
+    CG_PT_LLM_Panel,
+    CG_OT_FillLLMExample,
 )
-from .properties import register_scene_properties, unregister_scene_properties
+from .properties import register_scene_properties, unregister_scene_properties, CG_LLMResultLine
 from .handlers import register_handlers, unregister_handlers
 
 
@@ -73,6 +78,12 @@ classes = [
     MESH_OT_Add_Bus_Lane,
     MESH_OT_delete_Trees_Edge,
     InteriorPanel,
+    CG_LLMResultLine,
+    CG_UL_LLMResultList,
+    CG_PT_LLM_Panel,
+    CG_OT_FillLLMExample,
+    CG_OT_ExecuteLLMCommand,
+    CG_OT_ClearLLMResult,
 ]
 
 
