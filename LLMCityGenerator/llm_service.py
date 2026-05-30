@@ -363,9 +363,8 @@ def parse_local(user_text):
 
     # --- Street lights ---
     if "路灯" in text:
-        m = _re.search(r"路灯.*?([\d.]+)", text)
-        prob = float(m.group(1)) if m else 0.8
-        functions.append({"name": "set_street_lights", "params": {"probability": prob}})
+        enable = not ("关闭" in text or "关" in text)
+        functions.append({"name": "set_street_lights", "params": {"enable": enable}})
 
     # --- Traffic lights ---
     if "交通灯" in text or "红绿灯" in text:

@@ -237,13 +237,14 @@ def _handle_set_parking_probability(params, context):
 
 
 def _handle_set_street_lights(params, context):
-    prob = float(params.get("probability", 0.8))
+    """Socket_64 is bool — switch street lights on/off."""
+    enable = _to_bool(params.get("enable", True))
     mod = _get_active_mod(context)
     if not mod:
         return {"success": False, "results": ["未找到修改器。"]}
-    ok, err = _set_socket(mod, "Socket_64", max(0.0, min(1.0, prob)))
+    ok, err = _set_socket(mod, "Socket_64", enable)
     if ok:
-        return {"success": True, "results": [f"路灯密度已设置为 {prob}"]}
+        return {"success": True, "results": [f"路灯已{'开启' if enable else '关闭'}"]}
     return {"success": False, "results": [f"设置失败: {err}"]}
 
 
@@ -259,9 +260,45 @@ def _handle_set_traffic_lights(params, context):
 
 
 def _handle_set_building_height(params, context):
+    """Set Custom_Height face attribute on ALL faces of the active mesh."""
     height = int(params.get("height", 10))
     context.scene.height_value = height
-    return {"success": True, "results": [f"建筑高度值已设为 {height}m（需选中面后使用 Assign Height 按钮应用）"]}
+    obj = context.object if hasattr(context, 'object') else context.view_layer.objects.active
+    if not obj or obj.type != 'MESH':
+        return {"success": False, "results": [f"建筑高度设置失败：活动对象不是网格（当前: {obj.type if obj else 'None'}）"]}
+
+    orig_mode = obj.mode
+    if orig_mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    try:
+        mesh = obj.data
+        if "Custom_Height" not in mesh.attributes:
+            mesh.attributes.new(name="Custom_Height", type='INT', domain='FACE')
+        attr = mesh.attributes["Custom_Height"]
+        count = 0
+        for poly in mesh.polygons:
+            try:
+                attr.data[poly.index].value = height
+                count += 1
+            except Exception:
+                pass
+    except Exception as e:
+        return {"success": False, "results": [f"建筑高度设置失败: {e}"]}
+    finally:
+        if orig_mode != 'OBJECT':
+            try:
+                bpy.ops.object.mode_set(mode=orig_mode)
+            except Exception:
+                pass
+
+    obj.update_tag()
+    try:
+        bpy.context.view_layer.update()
+    except Exception:
+        pass
+
+    return {"success": True, "results": [f"建筑高度已设置为 {height}m（已应用到 {count} 个面）"]}
 
 
 def _handle_set_seed(params, context):
@@ -402,12 +439,12 @@ FUNCTION_REGISTRY = {
     },
     "set_street_lights": {
         "name": "set_street_lights",
-        "title": "路灯密度",
+        "title": "路灯开关",
         "category": "environment",
-        "description": "调整路灯的密度",
+        "description": "开启或关闭路灯（Socket_64 为 bool 类型）",
         "risk": "low",
-        "schemaSummary": "probability",
-        "parameters": {"probability": {"type": "number", "description": "密度概率 (0.0-1.0)", "required": True}},
+        "schemaSummary": "enable",
+        "parameters": {"enable": {"type": "boolean", "description": "true=开, false=关", "required": True}},
         "handler": _handle_set_street_lights,
     },
     "set_traffic_lights": {
