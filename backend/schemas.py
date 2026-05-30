@@ -154,7 +154,7 @@ class FunctionPlanNode(BaseModel):
     id: str
     funcName: str
     title: str
-    status: str  # "planned" | "approved" | "dispatched" | "blocked"
+    status: str = "approved"
     dependsOn: list[str] = []
     params: dict[str, Any] = {}
 

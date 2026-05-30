@@ -31,6 +31,10 @@ FUNCTION_LIST = [
     {"name": "set_sidewalk_scale", "params": {"scale": "number"}},
     {"name": "toggle_traffic", "params": {"enable": "bool"}},
     {"name": "toggle_buildings", "params": {"enable": "bool"}},
+    {"name": "run_traffic_simulation", "params": {"rules_version": "string", "seed": "int"}},
+    {"name": "run_crowd_simulation", "params": {"rules_version": "string", "seed": "int", "agent_count": "int"}},
+    {"name": "solve_point_layout", "params": {"point_set": "array"}},
+    {"name": "extract_sketch_topology", "params": {"attachment_ref": "string", "scale": "string"}},
 ]
 
 SYSTEM_PROMPT = f"""你是智能城市生成系统的 AI 助手。将用户的自然语言指令转换为函数调用 JSON。
@@ -187,7 +191,7 @@ def _parse_local(text: str, modalities: list[str], attachment_names: list[str]) 
         plan.append({"id":f"node-{node_id}","funcName":"set_street_width","title":"设置道路宽度",
                      "params":{"width":int(m.group(1))},"dependsOn":[],"status":"approved"})
 
-    m = re.search(r"(\d+)\s*车道", text)
+    m = re.search(r"(\d+)\s*车道", text) or re.search(r"车道.*?(\d+)", text)
     if m:
         node_id += 1
         plan.append({"id":f"node-{node_id}","funcName":"set_lane_amount","title":"设置车道",
@@ -220,6 +224,21 @@ def _parse_local(text: str, modalities: list[str], attachment_names: list[str]) 
         node_id += 1
         plan.append({"id":f"node-{node_id}","funcName":"toggle_buildings","title":"关闭建筑",
                      "params":{"enable":False},"dependsOn":[],"status":"approved"})
+
+    if "仿真" in text or "模拟" in text:
+        if "人群" in text or "行人" in text:
+            node_id += 1
+            plan.append({"id":f"node-{node_id}","funcName":"run_crowd_simulation","title":"人群仿真",
+                         "params":{"rules_version":"crowd-r2.8","seed":20260506,"agent_count":200},
+                         "dependsOn":[],"status":"approved"})
+        if "车辆" in text or "交通" in text:
+            node_id += 1
+            ver = "traffic-r3.2"
+            m = _re.search(r"traffic-r[\d.]+", text) or _re.search(r"rules.*?([\d.]+)", text)
+            if m:
+                ver = m.group(0)
+            plan.append({"id":f"node-{node_id}","funcName":"run_traffic_simulation","title":"车辆仿真",
+                         "params":{"rules_version":ver,"seed":20260506},"dependsOn":[],"status":"approved"})
 
     return {
         "plan": plan,
