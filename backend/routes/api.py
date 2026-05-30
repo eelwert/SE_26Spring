@@ -254,7 +254,10 @@ def submit_command(request: SubmitCommandRequest, actor: str = Query("analyst"))
         raise HTTPException(400, "指令信息不足")
 
     # Use the real LLM service to parse the command
-    result = llm_svc.parse_command(text, request.modalities, request.attachmentNames)
+    result = llm_svc.parse_command(
+        text, request.modalities, request.attachmentNames,
+        image_base64=request.imageBase64,
+    )
     plan_nodes = result.get("plan", [])
 
     needs = result.get("needsClarification", len(plan_nodes) == 0)

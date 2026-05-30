@@ -310,6 +310,7 @@ class SubmitCommandRequest(BaseModel):
     text: str
     modalities: list[str] = ["text"]
     attachmentNames: list[str] = []
+    imageBase64: Optional[str] = None  # base64-encoded image for screenshot modality
 
 
 class StartSimulationRequest(BaseModel):
