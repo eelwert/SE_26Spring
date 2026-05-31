@@ -150,7 +150,19 @@ class PedestrianManager:
                 return obj
 
             # Collection with mesh objects → pick a random mesh, create linked duplicate
-            mesh_objs = [o for o in ped_asset_coll.all_objects if o.type == "MESH"]
+            _EXCLUDE = {
+                "DFS_Man_01", "DFS_Man_02", "DFS_Man_03", "DFS_Man_04",
+                "DFS_Man_05", "DFS_Man_06",
+                "DFS_Woman_01_01", "DFS_Woman_01_02",
+                "DFS_Woman_02_01", "DFS_Woman_02_02", "DFS_Woman_02_3",
+                "DFS_Woman_03_01", "DFS_Woman_03_02",
+                "DFS_Woman_04_01", "DFS_Woman_04_02",
+                "DFS_Woman_05_01", "DFS_Woman_05_02",
+            }
+            mesh_objs = [
+                o for o in ped_asset_coll.all_objects
+                if o.type == "MESH" and o.name not in _EXCLUDE
+            ]
             if mesh_objs:
                 proto = random.choice(mesh_objs)
                 obj = bpy.data.objects.new(name, proto.data)
