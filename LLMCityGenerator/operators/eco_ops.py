@@ -439,6 +439,7 @@ class CG_OT_Eco_Add_Boat(bpy.types.Operator):
         scene = context.scene
         boat_scale = scene.cg_boat_scale
         flow_speed = scene.cg_river_flow_speed
+        river_width = scene.cg_river_width
 
         # Use selected curve, or fall back to any CG_River_Path*
         river_curve = None
@@ -567,16 +568,16 @@ class CG_OT_Eco_Add_Boat(bpy.types.Operator):
         follow_constraint.name = "CG_Boat_FollowPath"
         follow_constraint.target = river_curve
         follow_constraint.use_curve_follow = True
-        follow_constraint.forward_axis = 'FORWARD_Y'
+        follow_constraint.forward_axis = 'TRACK_NEGATIVE_Y'
         follow_constraint.up_axis = 'UP_Z'
         follow_constraint.use_fixed_location = False
 
-        # --- Place boat at a random point along the river ---
+        # --- Place boat at the river start with a small random head start ---
         import random as _random
 
-        start_factor = _random.uniform(0.05, 0.95)
-        frame_current = context.scene.frame_current % path_duration
-        follow_constraint.offset = int(start_factor * path_duration) - frame_current
+        start_factor = 0.0
+        head_start = _random.uniform(0.0, path_duration * 0.3)
+        follow_constraint.offset = start_factor * path_duration - head_start
 
         # Select the boat
         bpy.ops.object.mode_set(mode='OBJECT')
