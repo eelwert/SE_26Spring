@@ -44,9 +44,6 @@ class CG_Eco_Terrain_Panel(bpy.types.Panel):
         if scene.cg_terrain_detail_enabled:
             box.prop(scene, "cg_terrain_detail_height")
 
-        box.separator()
-        box.prop(scene, "cg_terrain_apply_to_city")
-
         row = box.row()
         row.scale_y = 2.0
         row.operator("cg.eco_generate_terrain", text="Generate Terrain", icon='SMOOTHCURVE')

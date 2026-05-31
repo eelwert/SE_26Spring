@@ -119,56 +119,6 @@ class CG_OT_Eco_Generate_Terrain(bpy.types.Operator):
         else:
             terrain_obj.data.materials.append(terrain_mat)
 
-        # --- Optionally apply terrain displacement to city grid ---
-        if scene.cg_terrain_apply_to_city:
-            city_obj = None
-            for obj in bpy.data.objects:
-                if obj.type == 'MESH':
-                    mod = obj.modifiers.get("City_Generator_2.0")
-                    if mod:
-                        city_obj = obj
-                        break
-
-            if city_obj is None:
-                self.report({'WARNING'}, "No city grid found. Apply City Generator first.")
-            else:
-                bpy.context.view_layer.objects.active = city_obj
-
-                # Add Subdivision Surface (before CG modifier, for smooth displacement)
-                subsurf_name = "Subsurf_City"
-                if subsurf_name not in city_obj.modifiers:
-                    subsurf = city_obj.modifiers.new(name=subsurf_name, type='SUBSURF')
-                    # Move Subsurf to before City_Generator_2.0
-                    cg_idx = city_obj.modifiers.find("City_Generator_2.0")
-                    sub_idx = city_obj.modifiers.find(subsurf_name)
-                    city_obj.modifiers.move(sub_idx, cg_idx)
-                    subsurf.levels = 2
-                    subsurf.render_levels = 2
-                    subsurf.subdivision_type = 'SIMPLE'
-
-                # Remove previous terrain displace modifiers
-                for old_mod_name in ("Displace_Terrain_Main", "Displace_Terrain_Detail"):
-                    old_mod = city_obj.modifiers.get(old_mod_name)
-                    if old_mod:
-                        city_obj.modifiers.remove(old_mod)
-
-                # Add displace modifiers (placed after CG modifier)
-                disp_city = city_obj.modifiers.new(name="Displace_Terrain_Main", type='DISPLACE')
-                disp_city.texture = tex_main
-                disp_city.strength = hill_height
-                disp_city.mid_level = 0.5
-                disp_city.texture_coords = 'LOCAL'
-
-                if detail_enabled:
-                    disp_city_detail = city_obj.modifiers.new(
-                        name="Displace_Terrain_Detail", type='DISPLACE')
-                    disp_city_detail.texture = tex_detail
-                    disp_city_detail.strength = detail_height
-                    disp_city_detail.mid_level = 0.5
-                    disp_city_detail.texture_coords = 'LOCAL'
-
-                self.report({'INFO'}, "Terrain displacement applied to city grid.")
-
         # Switch to Object mode and select the terrain
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.select_all(action='DESELECT')
@@ -388,7 +338,9 @@ class CG_OT_Eco_Generate_River(bpy.types.Operator):
 
         # Sample curve by converting to mesh (gives dense edge loop)
         curve_data.resolution_u = 64
-        bpy.ops.object.select_all(action='DESELECT')
+        for obj in context.selected_objects:
+            if obj != curve_obj:
+                obj.select_set(False)
         curve_obj.select_set(True)
         context.view_layer.objects.active = curve_obj
         bpy.ops.object.duplicate()
@@ -467,7 +419,9 @@ class CG_OT_Eco_Generate_River(bpy.types.Operator):
         curve_obj.parent = sampled_obj
 
         bpy.ops.object.mode_set(mode='OBJECT')
-        bpy.ops.object.select_all(action='DESELECT')
+        for obj in context.selected_objects:
+            if obj != sampled_obj:
+                obj.select_set(False)
         sampled_obj.select_set(True)
         context.view_layer.objects.active = sampled_obj
 
@@ -560,7 +514,8 @@ class CG_OT_Eco_Add_Boat(bpy.types.Operator):
             cabin.name = "CG_Boat_Cabin"
             cabin.scale = (0.5, 0.3, 0.15)
             cabin.parent = boat_obj
-            bpy.ops.object.select_all(action='DESELECT')
+            for obj in context.selected_objects:
+                obj.select_set(False)
             boat_obj.select_set(True)
             cabin.select_set(True)
             context.view_layer.objects.active = boat_obj
@@ -586,57 +541,51 @@ class CG_OT_Eco_Add_Boat(bpy.types.Operator):
 
             boat_obj.location = (0, 0, 0.75)
 
+        bpy.ops.object.mode_set(mode='OBJECT')
+        for obj in context.selected_objects:
+            if obj != boat_obj:
+                obj.select_set(False)
+        boat_obj.select_set(True)
+        context.view_layer.objects.active = boat_obj
+        bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+        boat_obj.location.x = 0.0
+        boat_obj.location.y = 0.0
+
+        # --- Follow Path constraint for animation ---
+        river_curve.data.use_path = True
+        path_duration = max(2, int(250.0 / max(flow_speed, 0.01)))
+        river_curve.data.path_duration = path_duration
+        try:
+            river_curve.data.driver_remove("eval_time")
+        except TypeError:
+            pass
+        fcurve = river_curve.data.driver_add("eval_time")
+        driver = fcurve.driver
+        driver.type = 'SCRIPTED'
+        driver.expression = f"frame % {path_duration}"
+        follow_constraint = boat_obj.constraints.new(type='FOLLOW_PATH')
+        follow_constraint.name = "CG_Boat_FollowPath"
+        follow_constraint.target = river_curve
+        follow_constraint.use_curve_follow = True
+        follow_constraint.forward_axis = 'FORWARD_Y'
+        follow_constraint.up_axis = 'UP_Z'
+        follow_constraint.use_fixed_location = False
+
         # --- Place boat at a random point along the river ---
         import random as _random
-        import math as _math
 
-        # Find the river surface that belongs to this curve
-        # The curve is parented to the surface (surface = curve.parent)
-        river_surface = river_curve.parent
-        if river_surface is None:
-            # Fallback: find by name
-            for obj in bpy.data.objects:
-                if obj.name.startswith("CG_River_Surface"):
-                    river_surface = obj
-                    break
-
-        if river_surface and len(river_surface.data.vertices) >= 4:
-            verts = river_surface.data.vertices
-            num_pairs = len(verts) // 2
-            lo = max(1, int(num_pairs * 0.15))
-            hi = min(num_pairs - 2, int(num_pairs * 0.85))
-            idx = _random.randint(lo, hi)
-
-            # Center point between left (2*idx) and right (2*idx+1)
-            vl = verts[2 * idx].co
-            vr = verts[2 * idx + 1].co
-            center = (vl + vr) * 0.5
-
-            # Tangent direction from neighbor center points
-            vl_prev = verts[2 * (idx - 1)].co
-            vr_prev = verts[2 * (idx - 1) + 1].co
-            vl_next = verts[2 * (idx + 1)].co
-            vr_next = verts[2 * (idx + 1) + 1].co
-            prev_c = (vl_prev + vr_prev) * 0.5
-            next_c = (vl_next + vr_next) * 0.5
-            direction = (next_c - prev_c).normalized()
-
-            # Position boat at center, raised above water
-            world_pos = river_surface.matrix_world @ center
-            boat_obj.location = (world_pos.x, world_pos.y, world_pos.z + 0.75)
-
-            # Rotate: boat forward (+Y) aligned with river tangent
-            boat_obj.rotation_euler = (0, 0, _math.atan2(direction.x, direction.y))
-        else:
-            # Fallback: place near the curve origin
-            boat_obj.location = (0, 0, 0.75)
+        start_factor = _random.uniform(0.05, 0.95)
+        frame_current = context.scene.frame_current % path_duration
+        follow_constraint.offset = int(start_factor * path_duration) - frame_current
 
         # Select the boat
         bpy.ops.object.mode_set(mode='OBJECT')
-        bpy.ops.object.select_all(action='DESELECT')
+        for obj in context.selected_objects:
+            if obj != boat_obj:
+                obj.select_set(False)
         boat_obj.select_set(True)
         context.view_layer.objects.active = boat_obj
 
         self.report({'INFO'},
-            f"Boat placed on '{river_curve.name}' at a random point.")
+            f"Boat on '{river_curve.name}'. Press Space to play animation.")
         return {'FINISHED'}

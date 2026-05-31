@@ -315,10 +315,6 @@ def register_scene_properties():
         name="Enable Detail Layer",
         description="Add a second noise layer for fine surface details",
         default=False)
-    bpy.types.Scene.cg_terrain_apply_to_city = bpy.props.BoolProperty(
-        name="Apply to City Grid",
-        description="Also apply terrain displacement to the city grid object",
-        default=False)
     bpy.types.Scene.cg_terrain_low_color = bpy.props.FloatVectorProperty(
         name="Low Color",
         description="Color for low ground areas",
@@ -418,7 +414,6 @@ def unregister_scene_properties():
     del bpy.types.Scene.cg_terrain_subdivisions
     del bpy.types.Scene.cg_terrain_detail_height
     del bpy.types.Scene.cg_terrain_detail_enabled
-    del bpy.types.Scene.cg_terrain_apply_to_city
     del bpy.types.Scene.cg_terrain_low_color
     del bpy.types.Scene.cg_terrain_high_color
     del bpy.types.Scene.cg_lake_size
