@@ -34,20 +34,31 @@ def solve_point_layout(params=None):
         return {"success": False, "message": "Missing required param 'points'"}
 
     connections = params.get("connections", None)
+    faces = params.get("faces", None)
     mesh_name = params.get("mesh_name", "RoadLayout")
 
     try:
-        obj = PointSolver.create_mesh(points, connections, mesh_name)
+        generate_faces = params.get("generate_faces", False)
+        apply_gn = params.get("apply_node_group", False)
+        obj = PointSolver.create_mesh(points, connections, mesh_name,
+                                      generate_faces=generate_faces, faces=faces)
+
+        if apply_gn:
+            bpy.ops.cg.apply_node_group()
+
         return {
             "success": True,
             "data": {
                 "mesh_name": obj.name,
                 "vertex_count": len(obj.data.vertices),
                 "edge_count": len(obj.data.edges),
+                "face_count": len(obj.data.polygons),
             },
-            "message": f"Mesh '{obj.name}' created — "
-                       f"{len(obj.data.vertices)} vertices, "
-                       f"{len(obj.data.edges)} edges",
+            "message": f"Mesh '{obj.name}' — "
+                       f"{len(obj.data.vertices)} v, "
+                       f"{len(obj.data.edges)} e, "
+                       f"{len(obj.data.polygons)} f"
+                       + (" + Geo Nodes" if apply_gn else ""),
         }
     except Exception as exc:
         return {"success": False, "message": str(exc)}
