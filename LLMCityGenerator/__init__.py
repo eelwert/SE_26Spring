@@ -19,6 +19,11 @@ from .operators import (
     CG_OT_Eco_Add_Boat,
     CG_OT_ExecuteLLMCommand,
     CG_OT_ClearLLMResult,
+    CG_OT_AddDynamicElements,
+    CG_OT_RemoveDynamicElements,
+    CG_OT_PreviewPointLayout,
+    CG_OT_ApplyPointLayout,
+    CG_OT_ApplySketchLayout,
 )
 from .panels import (
     CG_PT_Main_Panel,
@@ -43,6 +48,8 @@ from .panels import (
     CG_UL_LLMResultList,
     CG_PT_LLM_Panel,
     CG_OT_FillLLMExample,
+    CG_PT_Dynamics_Panel,
+    CG_PT_Layout_Panel,
 )
 from .properties import register_scene_properties, unregister_scene_properties, CG_LLMResultLine
 from .handlers import register_handlers, unregister_handlers
@@ -101,6 +108,13 @@ classes = [
     CG_OT_FillLLMExample,
     CG_OT_ExecuteLLMCommand,
     CG_OT_ClearLLMResult,
+    CG_OT_AddDynamicElements,
+    CG_OT_RemoveDynamicElements,
+    CG_PT_Dynamics_Panel,
+    CG_OT_PreviewPointLayout,
+    CG_OT_ApplyPointLayout,
+    CG_OT_ApplySketchLayout,
+    CG_PT_Layout_Panel,
 ]
 
 

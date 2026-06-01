@@ -22,3 +22,5 @@ from .eco_panel import (
     CG_Eco_River_Panel,
 )
 from .llm_panel import CG_PT_LLM_Panel, CG_OT_FillLLMExample, CG_UL_LLMResultList
+from .dynamics_panel import CG_PT_Dynamics_Panel
+from .layout_panel import CG_PT_Layout_Panel
