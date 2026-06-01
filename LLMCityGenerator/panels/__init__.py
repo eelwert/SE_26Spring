@@ -24,3 +24,15 @@ from .eco_panel import (
 from .llm_panel import CG_PT_LLM_Panel, CG_OT_FillLLMExample, CG_UL_LLMResultList
 from .dynamics_panel import CG_PT_Dynamics_Panel
 from .layout_panel import CG_PT_Layout_Panel
+
+
+# dA_add
+from .template_panel import CG_Template_Panel
+from .layout_template_panel import CG_Layout_Template_Panel
+from .road_texture_panel import (
+    CG_Pavement_Texture_Panel,
+    CG_Road_Texture_Panel,
+    CG_Texture_2D_Panel,
+)
+# dA_5_add
+from .furniture_asset_panel import CG_Added_3D_Assets_Panel

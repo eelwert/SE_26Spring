@@ -29,3 +29,11 @@ from .layout_ops import (
     CG_OT_ApplyPointLayout,
     CG_OT_ApplySketchLayout,
 )
+
+
+# dA_add
+from .template_ops import CG_OT_Apply_Scene_Template
+from .layout_template_ops import CG_OT_Apply_Layout_Template
+from .road_texture_ops import CG_OT_Apply_Pavement_Texture, CG_OT_Apply_Road_Texture
+# dA_5_add
+from .furniture_asset_ops import CG_OT_Apply_Added_3D_Asset, CG_OT_Apply_Selected_3D_Asset_Group
