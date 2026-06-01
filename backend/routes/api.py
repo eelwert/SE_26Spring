@@ -221,18 +221,13 @@ def dispatch_task(request: DispatchTaskRequest, actor: str = Query("modeler")):
     func = store._require(store.functions, request.functionName, "函数", key="name")
     if not func.enabled:
         raise HTTPException(400, "函数未注册或已停用")
-    status = "running" if func.risk != "high" else "queued"
     task = store._make_task(
         projectId=request.projectId, sceneId=request.sceneId,
         functionName=request.functionName, title=request.title,
         priority=request.priority, createdBy=actor,
         params=request.params, depends=request.dependsOn,
-        status=status,
+        status="queued",  # Always queued — Blender poller will pick it up
     )
-    # Dispatch to Blender if applicable
-    if status == "running":
-        from .. import blender_client
-        blender_client.dispatch_task(task)
     return _ok(task)
 
 
@@ -298,9 +293,6 @@ def dispatch_plan(commandId: str, actor: str = Query("analyst")):
             status="queued",
         )
         tasks.append(t)
-        # Dispatch to Blender
-        from .. import blender_client
-        blender_client.dispatch_task(t)
     return _ok(tasks)
 
 

@@ -131,40 +131,19 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     void refreshWorkspace();
   }, [refreshWorkspace]);
 
-  // WebSocket real-time task updates (with reconnect)
+  // Poll backend every 3s for task updates (simpler than WebSocket)
   useEffect(() => {
-    let ws: WebSocket | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout>;
-
-    const connect = () => {
-      ws = new WebSocket(`ws://localhost:8000/ws/frontend`);
-      ws.onopen = () => console.log('[WS] Connected');
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data as string);
-          if (msg.type === 'task_update' && msg.taskId) {
-            setBundle((prev) => ({
-              ...prev,
-              tasks: prev.tasks.map((t) =>
-                t.id === msg.taskId
-                  ? { ...t, status: msg.status as Task['status'], progress: msg.progress, logs: [...t.logs, ...(msg.results || [])] }
-                  : t
-              ),
-            }));
-          }
-        } catch { /* ignore */ }
-      };
-      ws.onclose = () => {
-        console.log('[WS] Disconnected, reconnecting in 3s...');
-        reconnectTimer = setTimeout(connect, 3000);
-      };
+    const poll = async () => {
+      try {
+        const res = await fetch('http://localhost:8000/api/workspace/bundle', { cache: 'no-store' });
+        const envelope = await res.json() as { data: WorkspaceBundle };
+        if (envelope?.data?.tasks) {
+          setBundle((prev) => ({ ...prev, tasks: envelope.data.tasks }));
+        }
+      } catch { /* backend not reachable yet */ }
     };
-
-    connect();
-    return () => {
-      if (ws) ws.close();
-      clearTimeout(reconnectTimer);
-    };
+    const timer = setInterval(poll, 3000);
+    return () => clearInterval(timer);
   }, []);
 
   const selectedProject = useMemo(

@@ -111,21 +111,20 @@ def _process_results():
                 params = task.get("params", {})
                 if not func_name:
                     continue
+                print(f"[sync] Executing: {func_name} params={params}")
                 try:
                     exec_result = execute_function(func_name, params, bpy.context)
+                    print(f"[sync] Result: {exec_result.get('success')}, {exec_result.get('results')}")
                 except Exception as e:
                     exec_result = {"success": False, "results": [str(e)]}
+                    print(f"[sync] Error: {e}")
 
-                # Report result (also in background thread to avoid blocking)
-                t = threading.Thread(
-                    target=_request,
-                    args=(f"{BACKEND_URL}/tasks/{task_id}/result", {
-                        "status": "success" if exec_result.get("success") else "failed",
-                        "results": exec_result.get("results", []),
-                    }, "POST"),
-                    daemon=True,
-                )
-                t.start()
+                # Report directly (not in thread — already in background thread)
+                report = _request(f"{BACKEND_URL}/tasks/{task_id}/result", {
+                    "status": "success" if exec_result.get("success") else "failed",
+                    "results": exec_result.get("results", []),
+                }, "POST")
+                print(f"[sync] Report for {task_id}: {'OK' if report else 'FAIL'}")
     except queue.Empty:
         pass
     return POLL_INTERVAL

@@ -6,10 +6,7 @@ instructions into structured function call JSON.
 
 import json
 import re
-import ssl
 import subprocess
-import urllib.request
-import urllib.error
 
 from .function_registry import get_registry_for_prompt, FUNCTION_REGISTRY
 
@@ -97,66 +94,13 @@ def _extract_json(text):
     return json.loads(text)
 
 
-def _call_via_curl(api_url, api_key, payload_str):
-    """Fallback API call using system curl (bypasses Blender's network stack)."""
-    try:
-        result = subprocess.run(
-            [
-                "curl", "-s",
-                api_url,
-                "-H", "Content-Type: application/json",
-                "-H", f"Authorization: Bearer {api_key}",
-                "-H", "User-Agent: LLMCityGenerator/1.0",
-                "-d", payload_str,
-                "--connect-timeout", "30",
-                "--max-time", "60",
-            ],
-            capture_output=True, text=True, timeout=65,
-        )
-        if result.returncode != 0 or not result.stdout.strip():
-            return None, f"curl failed (code {result.returncode}): {result.stderr[:200]}"
-        body = json.loads(result.stdout)
-        return body, None
-    except FileNotFoundError:
-        return None, "curl 未安装或不在 PATH 中"
-    except Exception as e:
-        return None, f"curl 调用异常: {str(e)}"
-
-
 def call_llm(user_text, api_key, api_url=None, model=None):
-    """Send user text to LLM and get parsed function calls.
-
-    Args:
-        user_text: User's natural language instruction
-        api_key: API key for the LLM service
-        api_url: API endpoint URL (defaults to DeepSeek)
-        model: Model name (defaults to deepseek-chat)
-
-    Returns:
-        dict with keys: functions (list), explanation (str), raw_response (str), success (bool)
+    """Send user text to LLM via curl and get parsed function calls.
+    Uses curl to bypass Blender's firewall-blocked Python network stack.
     """
     api_url = api_url or DEFAULT_API_URL
     model = model or DEFAULT_MODEL
     system_prompt = _build_system_prompt()
-
-    payload = json.dumps({
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_text},
-        ],
-        "temperature": 0.3,
-        "max_tokens": 2048,
-        "response_format": {"type": "json_object"},
-    }).encode("utf-8")
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}",
-        "User-Agent": "LLMCityGenerator/1.0",
-    }
-
-    req = urllib.request.Request(api_url, data=payload, headers=headers, method="POST")
 
     payload_str = json.dumps({
         "model": model,
@@ -169,50 +113,31 @@ def call_llm(user_text, api_key, api_url=None, model=None):
         "response_format": {"type": "json_object"},
     })
 
-    # Try with system default SSL context first, then fall back to unverified
-    ssl_contexts = []
     try:
-        ssl_contexts.append(ssl.create_default_context())
-    except Exception:
-        pass
-    ssl_contexts.append(ssl._create_unverified_context())
-
-    body = None
-    last_error = None
-    for ctx in ssl_contexts:
-        try:
-            with urllib.request.urlopen(req, timeout=30, context=ctx) as response:
-                body = json.loads(response.read().decode("utf-8"))
-                break
-        except urllib.error.HTTPError as e:
-            error_body = e.read().decode("utf-8") if e.fp else str(e)
+        result = subprocess.run(
+            ["curl", "-s", api_url,
+             "-H", "Content-Type: application/json",
+             "-H", f"Authorization: Bearer {api_key}",
+             "-H", "User-Agent: LLMCityGenerator/1.0",
+             "-d", payload_str,
+             "--connect-timeout", "15", "--max-time", "45"],
+            capture_output=True, text=True, timeout=50, shell=True,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
             return {
                 "functions": [],
-                "explanation": f"API 请求失败 (HTTP {e.code}): {error_body[:300]}",
-                "raw_response": error_body,
+                "explanation": f"curl 请求失败 (code {result.returncode})",
+                "raw_response": result.stderr[:200] if result.stderr else "",
                 "success": False,
             }
-        except urllib.error.URLError as e:
-            last_error = str(e.reason)
-        except Exception as e:
-            last_error = str(e)
-
-    # If urllib failed, try curl (workaround for Blender firewall issues)
-    if body is None:
-        body, curl_err = _call_via_curl(api_url, api_key, payload_str)
-        if body is None:
-            tips = (
-                f"\n\n提示: urllib 错误: {last_error}"
-                f"\ncurl 回退也失败: {curl_err}"
-                "\n1. 检查 API Key 是否正确"
-                "\n2. 检查网络连接和代理设置"
-            )
-            return {
-                "functions": [],
-                "explanation": f"所有网络方法均失败{tips}",
-                "raw_response": "",
-                "success": False,
-            }
+        body = json.loads(result.stdout)
+    except Exception as e:
+        return {
+            "functions": [],
+            "explanation": f"网络错误: {str(e)}",
+            "raw_response": "",
+            "success": False,
+        }
 
     content = body["choices"][0]["message"]["content"]
 
@@ -378,6 +303,10 @@ def parse_local(user_text):
         m = _re.search(r"楼.*?高.*?(\d+)", text)
     if m:
         functions.append({"name": "set_building_height", "params": {"height": int(m.group(1))}})
+    elif "降低建筑" in text or "减少建筑" in text or "建筑降低" in text or "建筑减少" in text:
+        functions.append({"name": "set_building_height", "params": {"height": 3}})
+    elif "增加建筑" in text or "提高建筑" in text or "建筑增加" in text or "建筑提高" in text:
+        functions.append({"name": "set_building_height", "params": {"height": 30}})
 
     # --- Toggle traffic ---
     if "关闭交通" in text or "禁用交通" in text or "没有交通" in text:

@@ -285,6 +285,14 @@ def _parse_local(text: str, modalities: list[str], attachment_names: list[str]) 
         node_id += 1
         plan.append({"id":f"node-{node_id}","funcName":"set_building_height","title":"设置建筑高度",
                      "params":{"height":int(m.group(1))},"dependsOn":[],"status":"approved"})
+    elif "降低建筑" in text or "减少建筑" in text:
+        node_id += 1
+        plan.append({"id":f"node-{node_id}","funcName":"set_building_height","title":"降低建筑高度",
+                     "params":{"height":3},"dependsOn":[],"status":"approved"})
+    elif "增加建筑" in text or "提高建筑" in text:
+        node_id += 1
+        plan.append({"id":f"node-{node_id}","funcName":"set_building_height","title":"增加建筑高度",
+                     "params":{"height":30},"dependsOn":[],"status":"approved"})
 
     if "关闭交通" in text or "禁用交通" in text:
         node_id += 1

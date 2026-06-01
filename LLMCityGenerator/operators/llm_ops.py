@@ -15,17 +15,6 @@ BACKEND_URL = "http://localhost:8000/api"
 
 def _report_to_backend(func_name, params, success, results):
     """Send execution result to backend in background thread."""
-    task_id = f"task-blender-{uuid.uuid4().hex[:8]}"
-
-    # First create task
-    task_payload = json.dumps({
-        "id": task_id, "traceId": "", "projectId": "", "sceneId": "",
-        "title": f"Blender: {func_name}", "functionName": func_name,
-        "status": "queued", "priority": 3, "progress": 0,
-        "createdBy": "Blender", "createdAt": "", "elapsedMs": 0,
-        "dependsOn": [], "retryable": False, "params": params,
-        "resultObjects": [], "logs": [], "errorCode": None,
-    })
 
     def _post(path, payload_str):
         host, port = "localhost", 8000
@@ -45,17 +34,33 @@ def _report_to_backend(func_name, params, success, results):
                     resp += chunk
                 except socket.timeout: break
             sock.close()
+            body_start = resp.find(b"\r\n\r\n")
+            if body_start != -1:
+                return json.loads(resp[body_start+4:].decode("utf-8"))
         except Exception:
-            pass
+            return None
 
-    threading.Thread(target=lambda: (
-        _post("/api/blender/register", json.dumps({"version": "2.8.0", "blender": "4.1"})),
-        _post("/api/tasks/dispatch?actor=Blender", task_payload),
+    def _run():
+        # Dispatch task and get the real ID from response
+        task_payload = json.dumps({
+            "projectId": "", "sceneId": "",
+            "functionName": func_name, "title": f"Blender: {func_name}",
+            "priority": 3, "params": params, "dependsOn": [],
+        })
+        resp = _post("/api/tasks/dispatch?actor=Blender", task_payload)
+        task_id = None
+        if resp and resp.get("data"):
+            task_id = resp["data"].get("id", "")
+        if not task_id:
+            task_id = f"task-blender-{uuid.uuid4().hex[:8]}"
+
+        # Report result
         _post(f"/api/tasks/{task_id}/result", json.dumps({
             "status": "success" if success else "failed",
             "results": results,
-        })),
-    ), daemon=True).start()
+        }))
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def _set_result_lines(scene, lines):
