@@ -39,6 +39,22 @@ FUNCTION_LIST = [
     {"name": "run_crowd_simulation", "params": {"rules_version": "string", "seed": "int", "agent_count": "int"}},
     {"name": "solve_point_layout", "params": {"point_set": "array"}},
     {"name": "extract_sketch_topology", "params": {"attachment_ref": "string", "scale": "string"}},
+    # Member A
+    {"name": "apply_scene_template", "params": {"template_id": "int 0-2"}},
+    {"name": "apply_road_texture", "params": {"texture_id": "int"}},
+    {"name": "apply_pavement_texture", "params": {"texture_id": "int"}},
+    {"name": "place_furniture", "params": {"asset_id": "int", "count": "int", "spacing": "number"}},
+    {"name": "apply_layout_template", "params": {"layout_id": "int", "rows": "int", "columns": "int"}},
+    # Member C
+    {"name": "generate_terrain", "params": {"hill_height": "number", "noise_scale": "number"}},
+    {"name": "generate_lake", "params": {"lake_size": "number", "ripple_strength": "number"}},
+    {"name": "generate_river", "params": {"river_width": "number", "seed": "int"}},
+    {"name": "add_boat", "params": {"boat_scale": "number", "flow_speed": "number"}},
+    # Member D
+    {"name": "start_simulation", "params": {"car_density": "number", "pedestrian_density": "number"}},
+    {"name": "stop_simulation", "params": {}},
+    {"name": "apply_layout", "params": {"points": "array"}},
+    {"name": "sketch_layout", "params": {"image_path": "string", "threshold": "int"}},
 ]
 
 SYSTEM_PROMPT = f"""你是智能城市生成系统的 AI 助手。将用户的自然语言指令转换为函数调用 JSON。

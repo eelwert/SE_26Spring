@@ -330,6 +330,14 @@ def parse_local(user_text):
     if m:
         functions.append({"name": "set_sidewalk_scale", "params": {"scale": float(m.group(1))}})
 
+    # --- Furniture ---
+    if "垃圾桶" in text:
+        functions.append({"name": "place_furniture", "params": {"asset_id": "metal_trash_can", "count": 10}})
+    elif "长椅" in text or "桌椅" in text:
+        functions.append({"name": "place_furniture", "params": {"asset_id": "wooden_picnic_table", "count": 8}})
+    elif "燃气罐" in text or "煤气罐" in text:
+        functions.append({"name": "place_furniture", "params": {"asset_id": "small_lpg_tank", "count": 6}})
+
     explanation = f"本地解析完成，识别到 {len(functions)} 个操作"
     if not functions:
         explanation = "未能从指令中识别出可执行的操作，请尝试更明确的描述。\n支持的关键词：道路宽度、车道、树木密度、模板（滨水/商业/校园/住宅等）、天气、时间、路灯、建筑高度等"

@@ -443,6 +443,79 @@ def _handle_sketch_layout(params, context):
     return {"success": True, "results": ["草图布局提取已完成"]}
 
 
+# --- Member A: Template, Texture, Asset handlers ---
+
+def _handle_apply_scene_template(params, context):
+    template_id = str(params.get("template_id", 0))
+    from .template_engine import apply_scene_template_function
+    try:
+        result = apply_scene_template_function(context, template_id)
+        return {"success": True, "results": [f"模板「{result.get('template_name', template_id)}」已应用"]}
+    except Exception as e:
+        return {"success": False, "results": [f"模板失败: {str(e)}"]}
+
+
+def _handle_apply_road_texture(params, context):
+    tid = int(params.get("texture_id", 0))
+    context.scene.road_texture_id = tid
+    try:
+        bpy.ops.cg.apply_road_texture()
+        return {"success": True, "results": [f"道路纹理已切换为 ID {tid}"]}
+    except Exception as e:
+        return {"success": False, "results": [f"道路纹理失败: {str(e)}"]}
+
+
+def _handle_apply_pavement_texture(params, context):
+    tid = int(params.get("texture_id", 0))
+    context.scene.pavement_texture_id = tid
+    try:
+        bpy.ops.cg.apply_pavement_texture()
+        return {"success": True, "results": [f"人行道纹理已切换为 ID {tid}"]}
+    except Exception as e:
+        return {"success": False, "results": [f"人行道纹理失败: {str(e)}"]}
+
+
+def _handle_place_furniture(params, context):
+    scene = context.scene
+    # asset_id is a string enum: "wooden_picnic_table", "metal_trash_can", etc.
+    if "asset_id" in params:
+        aid = params["asset_id"]
+        if isinstance(aid, int) or (isinstance(aid, str) and aid.isdigit()):
+            # Map integer to enum: 0=table, 1=trash_can, 2=duck, 3=tank
+            mapping = {"0": "wooden_picnic_table", "1": "metal_trash_can",
+                       "2": "rubber_duck_toy", "3": "small_lpg_tank"}
+            aid = mapping.get(str(aid), "wooden_picnic_table")
+        scene.added_3d_asset_id = str(aid)
+    if "count" in params:
+        c = int(params["count"])
+        scene.added_3d_asset_min_count = c
+        scene.added_3d_asset_max_count = c
+    if "spacing" in params:
+        scene.added_3d_asset_spacing = float(params["spacing"])
+    if "scale" in params:
+        scene.added_3d_asset_scale = float(params["scale"])
+    try:
+        bpy.ops.cg.apply_added_3d_asset()
+        return {"success": True, "results": ["家具资产已放置"]}
+    except Exception as e:
+        return {"success": False, "results": [f"家具放置失败: {str(e)}"]}
+
+
+def _handle_apply_layout_template(params, context):
+    scene = context.scene
+    if "layout_id" in params:
+        scene.layout_template_id = int(params["layout_id"])
+    if "rows" in params:
+        scene.layout_template_rows = int(params["rows"])
+    if "columns" in params:
+        scene.layout_template_columns = int(params["columns"])
+    try:
+        bpy.ops.cg.apply_layout_template()
+        return {"success": True, "results": ["布局模板已应用"]}
+    except Exception as e:
+        return {"success": False, "results": [f"布局模板失败: {str(e)}"]}
+
+
 # --- Registry ---
 
 FUNCTION_REGISTRY = {
@@ -698,6 +771,69 @@ FUNCTION_REGISTRY = {
             "threshold": {"type": "integer", "description": "边缘检测阈值", "required": False},
         },
         "handler": _handle_sketch_layout,
+    },
+    # --- Member A: Scene Template ---
+    "apply_scene_template": {
+        "name": "apply_scene_template",
+        "title": "场景模板",
+        "category": "layout",
+        "description": "应用预设场景模板 (0=滨水, 1=商业街, 2=枢纽)",
+        "risk": "low",
+        "schemaSummary": "template_id",
+        "parameters": {"template_id": {"type": "integer", "description": "模板号 0-2", "required": True}},
+        "handler": _handle_apply_scene_template,
+    },
+    # --- Member A: Road Textures ---
+    "apply_road_texture": {
+        "name": "apply_road_texture",
+        "title": "道路纹理",
+        "category": "asset",
+        "description": "切换道路纹理材质 (0=默认, 1=干净, 2=脏旧等)",
+        "risk": "low",
+        "schemaSummary": "texture_id",
+        "parameters": {"texture_id": {"type": "integer", "description": "纹理ID", "required": True}},
+        "handler": _handle_apply_road_texture,
+    },
+    "apply_pavement_texture": {
+        "name": "apply_pavement_texture",
+        "title": "人行道纹理",
+        "category": "asset",
+        "description": "切换人行道铺装纹理",
+        "risk": "low",
+        "schemaSummary": "texture_id",
+        "parameters": {"texture_id": {"type": "integer", "description": "纹理ID", "required": True}},
+        "handler": _handle_apply_pavement_texture,
+    },
+    # --- Member A: Furniture Assets ---
+    "place_furniture": {
+        "name": "place_furniture",
+        "title": "放置城市家具",
+        "category": "asset",
+        "description": "在城市对象周围放置 3D 家具（垃圾桶/长椅/燃气罐等）",
+        "risk": "low",
+        "schemaSummary": "asset_id, count, spacing",
+        "parameters": {
+            "asset_id": {"type": "integer", "description": "家具资产ID", "required": False},
+            "count": {"type": "integer", "description": "放置数量", "required": False},
+            "spacing": {"type": "number", "description": "间距", "required": False},
+            "scale": {"type": "number", "description": "缩放", "required": False},
+        },
+        "handler": _handle_place_furniture,
+    },
+    # --- Member A: Layout Template ---
+    "apply_layout_template": {
+        "name": "apply_layout_template",
+        "title": "布局模板",
+        "category": "layout",
+        "description": "应用预设网格布局模板",
+        "risk": "low",
+        "schemaSummary": "layout_id, rows, columns",
+        "parameters": {
+            "layout_id": {"type": "integer", "description": "布局ID", "required": False},
+            "rows": {"type": "integer", "description": "行数", "required": False},
+            "columns": {"type": "integer", "description": "列数", "required": False},
+        },
+        "handler": _handle_apply_layout_template,
     },
 }
 
