@@ -13,6 +13,10 @@ from .operators import (
     MESH_OT_delete_Trees_Edge,
     MESH_OT_SetmodernBuildingAttribute,
     MESH_OT_DeleteBuildingAttribute,
+    CG_OT_Eco_Generate_Terrain,
+    CG_OT_Eco_Generate_Lake,
+    CG_OT_Eco_Generate_River,
+    CG_OT_Eco_Add_Boat,
 )
 from .panels import (
     CG_PT_Main_Panel,
@@ -30,6 +34,10 @@ from .panels import (
     CG_Building_Roof_Panel,
     CG_Night_Lighting_Panel,
     InteriorPanel,
+    CG_Eco_Scene_Panel,
+    CG_Eco_Terrain_Panel,
+    CG_Eco_Lake_Panel,
+    CG_Eco_River_Panel,
 )
 from .properties import register_scene_properties, unregister_scene_properties
 from .handlers import register_handlers, unregister_handlers
@@ -73,6 +81,14 @@ classes = [
     MESH_OT_Add_Bus_Lane,
     MESH_OT_delete_Trees_Edge,
     InteriorPanel,
+    CG_OT_Eco_Generate_Terrain,
+    CG_OT_Eco_Generate_Lake,
+    CG_OT_Eco_Generate_River,
+    CG_OT_Eco_Add_Boat,
+    CG_Eco_Scene_Panel,
+    CG_Eco_Terrain_Panel,
+    CG_Eco_Lake_Panel,
+    CG_Eco_River_Panel,
 ]
 
 

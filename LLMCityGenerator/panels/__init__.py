@@ -15,3 +15,9 @@ from .building_settings import (
     CG_Building_Roof_Panel,
 )
 from .night_lighting import CG_Night_Lighting_Panel, InteriorPanel
+from .eco_panel import (
+    CG_Eco_Scene_Panel,
+    CG_Eco_Terrain_Panel,
+    CG_Eco_Lake_Panel,
+    CG_Eco_River_Panel,
+)
