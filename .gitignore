@@ -80,3 +80,4 @@ Desktop.ini
 # 编辑器本地工作区设置（防止强行覆盖队友的本地配置）
 .vscode/
 .idea/
+LLMCityGenerator/City_Generator2.0.blend
