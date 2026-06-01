@@ -347,6 +347,21 @@ def _add_layout_properties():
         min=5,
         max=500,
     )
+    bpy.types.Scene.cg_layout_connections_text = bpy.props.StringProperty(
+        name="",
+        description="Edge connections, e.g. 0,1;1,2;2,3 (sequential if empty)",
+        default="",
+    )
+    bpy.types.Scene.cg_layout_faces_text = bpy.props.StringProperty(
+        name="",
+        description="Optional face indices, e.g. 0,1,3,2;2,3,5,4",
+        default="",
+    )
+    bpy.types.Scene.cg_layout_auto_faces = bpy.props.BoolProperty(
+        name="Auto-detect Faces",
+        description="Generate quad faces from edge loops automatically",
+        default=False,
+    )
 
 
 def _remove_layout_properties():
@@ -355,6 +370,12 @@ def _remove_layout_properties():
     del bpy.types.Scene.cg_sketch_image_path
     del bpy.types.Scene.cg_sketch_threshold
     del bpy.types.Scene.cg_sketch_min_line_length
+    del bpy.types.Scene.cg_layout_connections_text
+    del bpy.types.Scene.cg_sketch_image_path
+    del bpy.types.Scene.cg_sketch_threshold
+    del bpy.types.Scene.cg_sketch_min_line_length
+    del bpy.types.Scene.cg_layout_faces_text
+    del bpy.types.Scene.cg_layout_auto_faces
 
 
 def _remove_dynamics_properties():
