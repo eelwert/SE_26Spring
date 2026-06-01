@@ -11,6 +11,7 @@ class CG_OT_Import_Node_Group(bpy.types.Operator):
     def execute(self, context):
         node_group_name = 'City_Generator_2.0'
         city_object_name = 'City_Generator_2.0_Object'
+        assets_collection_name = 'City_Gen_2.0_Assets'
 
         # Import the City object
         if city_object_name not in bpy.data.objects:
@@ -26,8 +27,14 @@ class CG_OT_Import_Node_Group(bpy.types.Operator):
         else:
             self.report({'INFO'}, f"'{node_group_name}' node group already exists.")
 
-        # Manage the collection visibility
-        assets_collection_name = 'City_Gen_2.0_Assets'
+        # Import and link the assets collection
+        if assets_collection_name not in bpy.data.collections:
+            append_data("Collection", assets_collection_name)
+        coll = bpy.data.collections.get(assets_collection_name)
+        if coll and coll.name not in context.scene.collection.children:
+            context.scene.collection.children.link(coll)
+
+        # Hide the assets collection from the viewport
         layer_collection = find_layer_collection(context.view_layer.layer_collection, assets_collection_name)
 
         if layer_collection:
@@ -51,11 +58,19 @@ class CG_OT_Apply_Node_Group(bpy.types.Operator):
 
     def execute(self, context):
         node_group_name = 'City_Generator_2.0'
+        assets_collection_name = 'City_Gen_2.0_Assets'
         obj = context.active_object
 
         # Import node group if missing
         if node_group_name not in bpy.data.node_groups:
             append_data("NodeTree", node_group_name)
+
+        # Import and link the assets collection if needed
+        if assets_collection_name not in bpy.data.collections:
+            append_data("Collection", assets_collection_name)
+        coll = bpy.data.collections.get(assets_collection_name)
+        if coll and coll.name not in context.scene.collection.children:
+            context.scene.collection.children.link(coll)
 
         # Apply node group as a modifier
         if node_group_name not in obj.modifiers:
@@ -65,7 +80,6 @@ class CG_OT_Apply_Node_Group(bpy.types.Operator):
             self.report({'WARNING'}, f"'{node_group_name}' modifier already exists on the active object!")
 
         # Manage the collection visibility
-        assets_collection_name = 'City_Gen_2.0_Assets'
         layer_collection = find_layer_collection(context.view_layer.layer_collection, assets_collection_name)
 
         if layer_collection:

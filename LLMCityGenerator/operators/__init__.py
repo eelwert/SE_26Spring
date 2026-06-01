@@ -13,4 +13,19 @@ from .mesh_attributes import (
     MESH_OT_SetmodernBuildingAttribute,
     MESH_OT_DeleteBuildingAttribute,
 )
+from .eco_ops import (
+    CG_OT_Eco_Generate_Terrain,
+    CG_OT_Eco_Generate_Lake,
+    CG_OT_Eco_Generate_River,
+    CG_OT_Eco_Add_Boat,
+)
 from .llm_ops import CG_OT_ExecuteLLMCommand, CG_OT_ClearLLMResult
+from .dynamics_ops import (
+    CG_OT_AddDynamicElements,
+    CG_OT_RemoveDynamicElements,
+)
+from .layout_ops import (
+    CG_OT_PreviewPointLayout,
+    CG_OT_ApplyPointLayout,
+    CG_OT_ApplySketchLayout,
+)
