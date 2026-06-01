@@ -18,8 +18,15 @@ class CG_PT_Layout_Panel(bpy.types.Panel):
 
         # ---- Manual coordinate input ----
         box = layout.box()
-        box.label(text="Point Coordinates", icon="OUTLINER_OB_MESH")
+        box.label(text="Points (x,y;x,y;...)", icon="OUTLINER_OB_MESH")
         box.prop(scene, "cg_layout_points_text", text="")
+        box.separator()
+        box.label(text="Connections (i,j;i,j;...)", icon="EDGESEL")
+        box.prop(scene, "cg_layout_connections_text", text="")
+        box.separator()
+        box.label(text="Faces (a,b,c,d;a,b,c,d;...)", icon="FACESEL")
+        box.prop(scene, "cg_layout_faces_text", text="")
+        box.prop(scene, "cg_layout_auto_faces", text="Auto-detect Faces")
         row = box.row(align=True)
         row.scale_y = 1.3
         row.operator("cg.preview_point_layout", text="Preview", icon="HIDE_OFF")
