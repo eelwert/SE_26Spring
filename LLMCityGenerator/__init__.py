@@ -17,6 +17,8 @@ from .operators import (
     CG_OT_Eco_Generate_Lake,
     CG_OT_Eco_Generate_River,
     CG_OT_Eco_Add_Boat,
+    CG_OT_ExecuteLLMCommand,
+    CG_OT_ClearLLMResult,
 )
 from .panels import (
     CG_PT_Main_Panel,
@@ -38,9 +40,13 @@ from .panels import (
     CG_Eco_Terrain_Panel,
     CG_Eco_Lake_Panel,
     CG_Eco_River_Panel,
+    CG_UL_LLMResultList,
+    CG_PT_LLM_Panel,
+    CG_OT_FillLLMExample,
 )
-from .properties import register_scene_properties, unregister_scene_properties
+from .properties import register_scene_properties, unregister_scene_properties, CG_LLMResultLine
 from .handlers import register_handlers, unregister_handlers
+from .blender_sync import start_sync, stop_sync
 
 
 bl_info = {
@@ -89,6 +95,12 @@ classes = [
     CG_Eco_Terrain_Panel,
     CG_Eco_Lake_Panel,
     CG_Eco_River_Panel,
+    CG_LLMResultLine,
+    CG_UL_LLMResultList,
+    CG_PT_LLM_Panel,
+    CG_OT_FillLLMExample,
+    CG_OT_ExecuteLLMCommand,
+    CG_OT_ClearLLMResult,
 ]
 
 
@@ -98,9 +110,11 @@ def register():
 
     register_scene_properties()
     register_handlers()
+    start_sync()
 
 
 def unregister():
+    stop_sync()
     for cls in reversed(classes):
         unregister_class(cls)
 

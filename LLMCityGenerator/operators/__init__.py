@@ -19,3 +19,4 @@ from .eco_ops import (
     CG_OT_Eco_Generate_River,
     CG_OT_Eco_Add_Boat,
 )
+from .llm_ops import CG_OT_ExecuteLLMCommand, CG_OT_ClearLLMResult
