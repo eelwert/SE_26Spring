@@ -1,9 +1,61 @@
 """LLM-related operators for natural language control."""
 
+import json
+import socket
+import threading
+import uuid
+
 import bpy
 
 from ..function_registry import execute_functions
 from ..llm_service import call_llm, parse_local
+
+BACKEND_URL = "http://localhost:8000/api"
+
+
+def _report_to_backend(func_name, params, success, results):
+    """Send execution result to backend in background thread."""
+    task_id = f"task-blender-{uuid.uuid4().hex[:8]}"
+
+    # First create task
+    task_payload = json.dumps({
+        "id": task_id, "traceId": "", "projectId": "", "sceneId": "",
+        "title": f"Blender: {func_name}", "functionName": func_name,
+        "status": "queued", "priority": 3, "progress": 0,
+        "createdBy": "Blender", "createdAt": "", "elapsedMs": 0,
+        "dependsOn": [], "retryable": False, "params": params,
+        "resultObjects": [], "logs": [], "errorCode": None,
+    })
+
+    def _post(path, payload_str):
+        host, port = "localhost", 8000
+        body = payload_str.encode("utf-8")
+        req = f"POST {path} HTTP/1.0\r\nHost: {host}\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: {len(body)}\r\n\r\n"
+        req = req.encode("utf-8") + body
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(2)
+            sock.connect((host, port))
+            sock.sendall(req)
+            resp = b""
+            while True:
+                try:
+                    chunk = sock.recv(4096)
+                    if not chunk: break
+                    resp += chunk
+                except socket.timeout: break
+            sock.close()
+        except Exception:
+            pass
+
+    threading.Thread(target=lambda: (
+        _post("/api/blender/register", json.dumps({"version": "2.8.0", "blender": "4.1"})),
+        _post("/api/tasks/dispatch?actor=Blender", task_payload),
+        _post(f"/api/tasks/{task_id}/result", json.dumps({
+            "status": "success" if success else "failed",
+            "results": results,
+        })),
+    ), daemon=True).start()
 
 
 def _set_result_lines(scene, lines):
@@ -92,6 +144,14 @@ class CG_OT_ExecuteLLMCommand(bpy.types.Operator):
 
         scene.llm_status = "done"
         _set_result_lines(scene, "\n".join(lines))
+
+        # Report to backend for frontend sync
+        for r in results:
+            threading.Thread(
+                target=_report_to_backend,
+                args=(r["function"], {}, r["success"], r.get("results", [])),
+                daemon=True,
+            ).start()
 
         if all_success:
             self.report({'INFO'}, f"成功执行 {len(valid_funcs)} 个操作")

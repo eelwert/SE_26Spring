@@ -52,6 +52,8 @@ def _now():
 
 @router.post("/auth/login")
 def login(request: LoginRequest):
+    import time
+    store.frontend_active = time.time()
     user = next((u for u in store.demo_users if u.email == request.email or u.role == request.role), None)
     if not user or request.password != store.DEMO_PASSWORD:
         raise HTTPException(401, "账号或密码不正确")
@@ -390,4 +392,50 @@ def toggle_plugin_function(functionName: str, enabled: bool = Query(...), actor:
     func = store._require(store.functions, functionName, "函数", key="name")
     updated = func.model_copy(update={"enabled": enabled})
     store.functions = [updated if f.name == functionName else f for f in store.functions]
+    return _ok(updated)
+
+
+# ── Blender sync (polling) ────────────────────────────────
+
+@router.post("/blender/register")
+def blender_register(body: dict):
+    store.blender_connected = True
+    store.blender_info = body
+    # Send pending tasks to the just-connected Blender
+    pending = [t for t in store.tasks if t.status == "queued"]
+    return _ok({"tasks": [t.model_dump() for t in pending]})
+
+
+@router.get("/tasks/pending")
+def get_pending_tasks():
+    pending = [t for t in store.tasks if t.status == "queued"][:10]
+    # Mark as running
+    for t in pending:
+        idx = next(i for i, x in enumerate(store.tasks) if x.id == t.id)
+        store.tasks[idx] = t.model_copy(update={"status": "running", "progress": 10})
+    return _ok({"tasks": [t.model_dump() for t in pending]})
+
+
+@router.post("/tasks/{task_id}/result")
+def task_result(task_id: str, body: dict):
+    task = store._require(store.tasks, task_id, "任务")
+    status = body.get("status", "success")
+    progress = 100 if status == "success" else 50
+    updated = task.model_copy(update={
+        "status": status,
+        "progress": progress,
+        "logs": task.logs + body.get("results", []),
+    })
+    store.tasks = [updated if t.id == task_id else t for t in store.tasks]
+
+    # Notify frontend via WebSocket
+    from ..ws_manager import manager
+    manager.notify_frontend({
+        "type": "task_update",
+        "taskId": task_id,
+        "status": status,
+        "progress": progress,
+        "results": body.get("results", []),
+    })
+
     return _ok(updated)

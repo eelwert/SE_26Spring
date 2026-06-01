@@ -114,6 +114,9 @@ commands: list[MultimodalCommand] = []
 simulations: list[SimulationJob] = []
 audit_logs: list[AuditLog] = []
 versions: list[VersionSnapshot] = []
+blender_connected: bool = False
+blender_info: dict = {}
+frontend_active: float = 0.0  # timestamp of last API request
 
 settings: list[RuntimeSetting] = [
     RuntimeSetting(id="set-llm-confidence", title="低置信度澄清阈值",

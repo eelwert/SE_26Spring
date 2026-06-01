@@ -131,6 +131,42 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     void refreshWorkspace();
   }, [refreshWorkspace]);
 
+  // WebSocket real-time task updates (with reconnect)
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout>;
+
+    const connect = () => {
+      ws = new WebSocket(`ws://localhost:8000/ws/frontend`);
+      ws.onopen = () => console.log('[WS] Connected');
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data as string);
+          if (msg.type === 'task_update' && msg.taskId) {
+            setBundle((prev) => ({
+              ...prev,
+              tasks: prev.tasks.map((t) =>
+                t.id === msg.taskId
+                  ? { ...t, status: msg.status as Task['status'], progress: msg.progress, logs: [...t.logs, ...(msg.results || [])] }
+                  : t
+              ),
+            }));
+          }
+        } catch { /* ignore */ }
+      };
+      ws.onclose = () => {
+        console.log('[WS] Disconnected, reconnecting in 3s...');
+        reconnectTimer = setTimeout(connect, 3000);
+      };
+    };
+
+    connect();
+    return () => {
+      if (ws) ws.close();
+      clearTimeout(reconnectTimer);
+    };
+  }, []);
+
   const selectedProject = useMemo(
     () => bundle.projects.find((project) => project.id === selectedProjectId),
     [bundle.projects, selectedProjectId],

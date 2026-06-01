@@ -38,6 +38,7 @@ from .panels import (
 )
 from .properties import register_scene_properties, unregister_scene_properties, CG_LLMResultLine
 from .handlers import register_handlers, unregister_handlers
+from .blender_sync import start_sync, stop_sync
 
 
 bl_info = {
@@ -93,9 +94,11 @@ def register():
 
     register_scene_properties()
     register_handlers()
+    start_sync()
 
 
 def unregister():
+    stop_sync()
     for cls in reversed(classes):
         unregister_class(cls)
 
