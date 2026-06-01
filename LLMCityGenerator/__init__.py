@@ -13,6 +13,11 @@ from .operators import (
     MESH_OT_delete_Trees_Edge,
     MESH_OT_SetmodernBuildingAttribute,
     MESH_OT_DeleteBuildingAttribute,
+    CG_OT_AddDynamicElements,
+    CG_OT_RemoveDynamicElements,
+    CG_OT_PreviewPointLayout,
+    CG_OT_ApplyPointLayout,
+    CG_OT_ApplySketchLayout,
 )
 from .panels import (
     CG_PT_Main_Panel,
@@ -30,6 +35,8 @@ from .panels import (
     CG_Building_Roof_Panel,
     CG_Night_Lighting_Panel,
     InteriorPanel,
+    CG_PT_Dynamics_Panel,
+    CG_PT_Layout_Panel,
 )
 from .properties import register_scene_properties, unregister_scene_properties
 from .handlers import register_handlers, unregister_handlers
@@ -73,6 +80,13 @@ classes = [
     MESH_OT_Add_Bus_Lane,
     MESH_OT_delete_Trees_Edge,
     InteriorPanel,
+    CG_OT_AddDynamicElements,
+    CG_OT_RemoveDynamicElements,
+    CG_PT_Dynamics_Panel,
+    CG_OT_PreviewPointLayout,
+    CG_OT_ApplyPointLayout,
+    CG_OT_ApplySketchLayout,
+    CG_PT_Layout_Panel,
 ]
 
 

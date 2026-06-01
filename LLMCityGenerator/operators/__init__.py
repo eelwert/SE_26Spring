@@ -13,3 +13,12 @@ from .mesh_attributes import (
     MESH_OT_SetmodernBuildingAttribute,
     MESH_OT_DeleteBuildingAttribute,
 )
+from .dynamics_ops import (
+    CG_OT_AddDynamicElements,
+    CG_OT_RemoveDynamicElements,
+)
+from .layout_ops import (
+    CG_OT_PreviewPointLayout,
+    CG_OT_ApplyPointLayout,
+    CG_OT_ApplySketchLayout,
+)

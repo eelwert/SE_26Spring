@@ -165,7 +165,265 @@ UI 通过 Socket ID 绑定到 Geometry Nodes 修改器，这些 ID 必须与 Cit
 - 屋顶: `Socket_147..Socket_149`, `Socket_164`, `Socket_174..Socket_181`
 - 复制操作切换: `Socket_163`, `Socket_145`
 
+<<<<<<< HEAD
+=======
+## 动态模拟系统（Dynamic Simulation）
+
+`dynamics/` 包提供了独立于 Geometry Nodes 的 Python 驱动的动态元素系统。基于网格边（路网）提取道路曲线，生成车辆、行人和交通灯，通过帧回调驱动动画。
+
+### 包结构
+
+```
+dynamics/
+├── __init__.py              # 导出 + get_simulation_manager()
+├── function_api.py          # ★ LLM 可调用的函数接口 + 参数 Schema + dispatch 入口
+├── road_analyzer.py         # RoadAnalyzer: 网格边 → Bezier 曲线
+├── car_system.py            # CarManager: 车辆生成 + 直接位置更新
+├── pedestrian_system.py     # PedestrianManager: 行人 + 人行道路径
+├── traffic_light.py         # TrafficLightManager: 路口检测 + 红绿灯周期
+└── simulation_manager.py    # SimulationManager 单例 + bpy.app.timers 驱动
+```
+
+### 新增操作符
+
+- `cg.add_dynamic_elements`
+  - 触发条件: OBJECT 模式、选中 mesh 对象
+  - 从选中 mesh 的边提取道路曲线，生成车辆、行人、交通灯
+  - 结果收集在 `Dynamic_Traffic` 集合下
+- `cg.remove_dynamic_elements`
+  - 删除所有动态模拟对象（车辆、行人、交通灯、曲线）
+  - 移除 `Dynamic_Traffic` 集合及其子集合
+
+### 新增面板
+
+- `CG_PT_Dynamics_Panel`（`CG_Setting_panel` 子面板）
+  - 标题: "Dynamic Simulation"，默认折叠
+  - 按钮: Add Dynamic Elements / Remove Dynamic Elements
+  - **Add Dynamic Elements** 内部调用原插件 `CG_Traffic_Sim_Panel` 的 Geo Nodes 仿真（配置 Socket_89–109 + Bake）处理汽车路径与运动，同时启动 Python 驱动的行人 + 交通灯系统
+  - 车辆参数: Car Density（映射到 Geo Nodes `Socket_90`）, Min Speed（`Socket_98`）, Max Speed（`Socket_99`）
+  - 行人参数: Pedestrian Density (0-200), Walking Speed (0.5-5 m/s)
+  - 交通灯参数: Green Duration (30-600 frames), Yellow Duration (10-120), Red Duration (30-600)
+
+### 新增 Scene 属性
+
+在 `properties.py` 中注册（`cg_` 前缀）:
+- `cg_car_density` (Int, 0..200, default 10)
+- `cg_car_speed_min` (Float, 1.0..50.0, default 5.0)
+- `cg_car_speed_max` (Float, 1.0..50.0, default 15.0)
+- `cg_pedestrian_density` (Int, 0..200, default 5)
+- `cg_pedestrian_speed` (Float, 0.5..5.0, default 1.5)
+- `cg_traffic_light_green` (Int, 30..600, default 120)
+- `cg_traffic_light_yellow` (Int, 10..120, default 30)
+- `cg_traffic_light_red` (Int, 30..600, default 120)
+- `cg_dynamics_active` (Bool, default False)
+
+### 生成的对象集合
+
+所有 Python 生成的动态对象位于 `Dynamic_Traffic` 父集合下:
+- `Dynamic_Traffic_Paths` — 从 mesh 边提取的双向车道 Bezier 曲线
+- `Dynamic_Sidewalk_Paths` — 人行道偏移曲线（道路两侧各一条）
+- `Dynamic_Pedestrians` — 行人对象（彩色圆柱体，直接定位到人行道曲线上）
+- `Dynamic_Traffic_Lights` — 交通灯对象（球体 + 发光材质，位于路口上方）
+
+车辆由 Geo Nodes 原生仿真直接在场景中实例化，不走 Python 系统。
+
+### 自定义属性
+
+所有动态对象携带 `cg.*` 自定义属性用于帧回调驱动:
+- 车辆: `cg.is_car`, `cg.car_speed`, `cg.car_direction`, `cg.car_curve`, `cg.car_offset`, `cg.car_curve_length`, `cg.car_stopped`, `cg.car_edge_id`
+- 行人: `cg.is_pedestrian`, `cg.ped_speed`, `cg.ped_direction`, `cg.ped_curve`, `cg.ped_offset`, `cg.ped_curve_length`, `cg.ped_stopped`, `cg.ped_edge_id`
+- 交通灯: `cg.is_traffic_light`, `cg.tl_intersection_id`, `cg.tl_edge_id`, `cg.tl_green`, `cg.tl_yellow`, `cg.tl_red`, `cg.tl_phase_offset`, `cg.tl_state`, `cg.tl_material`
+- 路径: `cg.is_road_path`, `cg.edge_index`, `cg.road_length`
+
+### 驱动方式
+
+**纯 Python 驱动**（`bpy.app.timers` ~30 Hz）：汽车、行人、交通灯均由 Python 系统统一管理。
+- 每 tick：更新交通灯状态 → 驱动汽车位置 → 推进行人位置 → `bpy.context.view_layer.update()`
+- 汽车和行人通过 `CarManager.place_on_curve()` 直接设置 `obj.location` / `obj.rotation_euler`
+- 不再依赖 Geo Nodes 仿真缓存
+
+### LLM 函数 API (`function_api.py`)
+
+供成员 B 的 `function_registry.py` 直接导入。所有函数返回统一格式：`{"success": bool, "data": ..., "message": str}`。
+
+#### 可用函数
+
+| functionName | 功能 | 关键参数 |
+|---|---|---|
+| `run_traffic_simulation` | 启动车辆仿真 | `car_density`, `speed_min`, `speed_max`, `traffic_lights` |
+| `run_crowd_simulation` | 启动行人仿真 | `pedestrian_density`, `walking_speed`, `traffic_lights` |
+| `run_full_simulation` | 同时启动车+行人+交通灯 | 以上所有参数 + `green_duration`, `yellow_duration`, `red_duration` |
+| `stop_simulation` | 停止仿真并清理 | 无 |
+| `set_traffic_light_timing` | 调整交通灯周期 | `green`, `yellow`, `red` (帧数) |
+| `get_simulation_status` | 查询仿真状态 | 无 |
+
+#### 成员 B 集成方式
+
+```python
+# 方式 1: 直接导入注册表
+from LLMCityGenerator.dynamics.function_api import FUNCTION_REGISTRY
+# FUNCTION_REGISTRY 是一个 dict，key = functionName，value = {function, description, params}
+
+# 方式 2: 使用 dispatch 入口
+from LLMCityGenerator.dynamics.function_api import dispatch_blender_job
+result = dispatch_blender_job("run_full_simulation", {"car_density": 20})
+# result = {"success": True, "data": {...}, "message": "..."}
+
+# 方式 3: 直接调用具体函数
+from LLMCityGenerator.dynamics.function_api import run_traffic_simulation
+result = run_traffic_simulation(mesh_obj=bpy.context.object, params={"car_density": 15})
+```
+
+#### 返回格式
+
+```python
+# 成功
+{"success": True, "data": {"car_count": 24, "road_count": 24}, "message": "24 cars on 24 roads"}
+
+# 失败
+{"success": False, "message": "Simulation already active. Call stop_simulation() first."}
+```
+
+### Python API 调用示例
+
+```python
+# 获取管理器单例
+from dynamics.simulation_manager import SimulationManager
+sim = SimulationManager.get_instance()
+
+# 手动设置（通常由操作符或 function_api 完成）
+sim.setup(bpy.context.active_object, enable_cars=True, enable_pedestrians=False)
+
+# 手动清除
+SimulationManager.reset_instance()
+
+# 单独模块使用
+from dynamics.road_analyzer import RoadAnalyzer
+roads = RoadAnalyzer.extract_roads(mesh_obj)
+RoadAnalyzer.cleanup_road_curves()
+```
+
+## 道路布局系统（Road Layout）
+
+`layout/` 包提供道路布局的两种生成方式：手动坐标输入和手绘草图提取。输出为 mesh 对象（vertices=路口，edges=道路），可作为 City Generator 和动态仿真的输入。
+
+### 包结构
+
+```
+layout/
+├── __init__.py              # 导出
+├── point_solver.py          # PointSolver: 坐标点 → mesh
+├── sketch_processor.py      # SketchProcessor: 图像 → 线段 → mesh（cv2/LLM 双模式）
+└── layout_api.py            # LLM 可调用函数 + 参数 Schema
+```
+
+### 新增操作符
+
+- `cg.preview_point_layout` — 解析坐标文本，创建预览 mesh
+- `cg.apply_point_layout` — 解析坐标，应用为正式道路布局 mesh
+- `cg.apply_sketch_layout` — 加载草图 → 提取线条 → 创建 mesh
+
+### 新增面板
+
+- `CG_PT_Layout_Panel`（`CG_Setting_panel` 子面板）
+  - 标题: "Road Layout Control"，默认折叠
+  - 坐标输入: 文本输入框（格式 `x,y;x,y;...`）+ Preview / Apply 按钮
+  - 草图输入: 文件选择器 + Threshold (0.1-1.0) + Min Length (5-500) + 生成按钮
+
+### 新增 Scene 属性
+
+- `cg_layout_points_text` (String, 坐标文本)
+- `cg_sketch_image_path` (String, FILE_PATH, 草图路径)
+- `cg_sketch_threshold` (Float, 0.1-1.0, default 0.5)
+- `cg_sketch_min_line_length` (Int, 5-500, default 30)
+
+### LLM 函数 API
+
+已合并到 `dispatch_blender_job` 统一入口：
+
+| functionName | 功能 | 关键参数 |
+|---|---|---|
+| `solve_point_layout` | 坐标点集 → 道路 mesh | `points` (必填), `connections` (可选), `mesh_name` |
+| `extract_sketch_topology` | 草图图像 → 道路 mesh | `image_path` (必填), `method`, `threshold`, `min_line_length` |
+| `clear_road_layout` | 删除当前道路布局 mesh | 无 |
+
+### 成员 B 集成
+
+```python
+from bl_ext.user_default.LLMCityGenerator.dynamics.function_api import dispatch_blender_job
+
+# 手动坐标
+dispatch_blender_job("solve_point_layout", {
+    "points": [[0,0],[50,0],[50,50],[0,50]]
+})
+
+# 草图提取
+dispatch_blender_job("extract_sketch_topology", {
+    "image_path": "C:/path/to/sketch.jpg",
+    "threshold": 0.5,
+    "min_line_length": 30
+})
+```
+
+### 完整联调链（LLM 预期调用）
+
+```
+1. 创建 mesh（Grid / solve_point_layout / extract_sketch_topology）
+2. cg.import_node_group    → 导入 Geo Nodes 节点组与资产
+3. cg.apply_node_group     → 向 mesh 添加 City_Generator_2.0 修改器（生成建筑/道路）
+4. run_full_simulation()   → 配置 Geo Nodes 交通 Socket + Bake → 车辆出现
+                           → 同时启动 Python 行人 + 交通灯
+   - car_density: 映射到 Geo Nodes Socket_90（需 Remove → 调参 → Add 来动态修改）
+   - pedestrian_density: 仅在 Add 时生效
+```
+
+**注意**：必须先 Apply Node Group 才能看到汽车（需要 `City_Generator_2.0` 修改器）。密度参数仅在点击 Add Dynamic Elements 时读取当前滑条值。
+
+>>>>>>> origin/feature/path_dynamic_simulation
 ## 注册流程
 
 - `register()`: 注册类、定义 Scene 属性并注册帧变化处理器。
 - `unregister()`: 反注册类、移除处理器并删除 Scene 属性。
+<<<<<<< HEAD
+=======
+
+## 开发工作流
+
+### 插件打包与安装
+
+由于 Blender 5.1 使用扩展系统，插件安装路径为：
+```
+C:\Users\<用户名>\AppData\Roaming\Blender Foundation\Blender\5.1\extensions\user_default\LLMCityGenerator\
+```
+
+开发时的工作流：
+1. 在开发目录 `D:\Software Engineering\code\SE_26Spring\LLMCityGenerator\` 编辑代码
+2. 将 `LLMCityGenerator/` 打包为 `.zip`（排除 `__pycache__`、`.git`、测试文件）
+3. 在 Blender 中：`Edit > Preferences > Add-ons > Install from Disk` 安装 zip
+4. 重启 Blender 或按 `F3` 搜索 `Reload Scripts` 重载
+
+### 外部资产文件
+
+`assets/pedestrians.blend` — 行人模型（来自 Procedural Crowds）。包含两个集合：
+- `people`: 34 个角色 mesh 对象（静态 T-pose）
+- `armatures`: 34 个骨骼对象（行人系统不使用，仅保留以维持模型结构）
+
+插件启动时通过 `_resolve_pedestrian_collection()` 自动加载。
+
+### Blender 控制台测试
+```python
+from bl_ext.user_default.LLMCityGenerator.dynamics.function_api import dispatch_blender_job
+dispatch_blender_job("list_available_models")       # 查看可用模型
+dispatch_blender_job("run_full_simulation", {})      # 启动仿真
+dispatch_blender_job("get_simulation_status")        # 查看状态
+dispatch_blender_job("stop_simulation")              # 停止
+dispatch_blender_job("solve_point_layout", {"points": [[0,0],[50,0],[50,50],[0,50]]})
+```
+
+### 驱动方式（更新）
+
+**混合架构**：
+- **汽车**：调用原插件 City Generator 的 Geo Nodes 仿真（Socket_89–109），通过 `_configure_geo_traffic()` 配置参数 → `bpy.ops.object.simulation_nodes_cache_calculate_to_frame` 触发路径生成与车辆移动。转弯、跟车、碰撞均由 Geo Nodes 原生处理。
+- **行人**：`PedestrianManager` 从 `assets/pedestrians.blend` 加载角色 mesh（Procedural Crowds），linked duplicate 到人行道偏移曲线上，`bpy.app.timers` 每帧更新位置。
+- **交通灯**：`TrafficLightManager` 从 mesh 顶点检测路口（≥2 条边），放置信号灯模型，timer 中按周期切换 GREEN/YELLOW/RED 状态，存储在 `cg.tl_state` 属性上。所有路口共用同一相位。
+>>>>>>> origin/feature/path_dynamic_simulation
