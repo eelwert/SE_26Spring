@@ -2,14 +2,68 @@ import bpy
 from .properties import update_parallax_settings
 
 
+_syncing_added_3d_group_selection = False
+
+
 def frame_change_handler(scene):
     update_parallax_settings(scene)
 
 
+def _generated_group_instances(group_id):
+    return [
+        obj
+        for obj in bpy.data.objects
+        if obj.get("cg_added_3d_asset_instance") and obj.get("cg_added_3d_group_id") == group_id
+    ]
+
+
+def added_3d_group_selection_handler(scene, depsgraph):
+    global _syncing_added_3d_group_selection
+    if _syncing_added_3d_group_selection:
+        return
+
+    context = bpy.context
+    active = context.object
+    if active is None or not active.get("cg_added_3d_asset_instance"):
+        if getattr(scene, "added_3d_active_group_id", ""):
+            scene.added_3d_active_group_id = ""
+        return
+
+    group_id = active.get("cg_added_3d_group_id", "")
+    if not group_id:
+        return
+
+    group_instances = _generated_group_instances(group_id)
+    if not group_instances:
+        return
+
+    _syncing_added_3d_group_selection = True
+    try:
+        for obj in bpy.data.objects:
+            if obj.get("cg_added_3d_asset_instance"):
+                obj.select_set(obj.get("cg_added_3d_group_id") == group_id)
+        context.view_layer.objects.active = active
+
+        if scene.added_3d_active_group_id != group_id:
+            scene.added_3d_active_group_id = group_id
+            scene.added_3d_group_edit_min_count = int(active.get("cg_added_3d_group_min_count", len(group_instances)))
+            scene.added_3d_group_edit_max_count = int(active.get("cg_added_3d_group_max_count", len(group_instances)))
+            scene.added_3d_group_edit_spacing = float(active.get("cg_added_3d_group_spacing", 5.0))
+            scene.added_3d_group_edit_scale = float(active.get("cg_added_3d_group_ui_scale", 1.0))
+            scene.added_3d_group_edit_placement_offset = float(active.get("cg_added_3d_group_placement_offset", 0.0))
+    finally:
+        _syncing_added_3d_group_selection = False
+
+
 def register_handlers():
-    bpy.app.handlers.frame_change_pre.append(frame_change_handler)
+    if frame_change_handler not in bpy.app.handlers.frame_change_pre:
+        bpy.app.handlers.frame_change_pre.append(frame_change_handler)
+    if added_3d_group_selection_handler not in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.append(added_3d_group_selection_handler)
 
 
 def unregister_handlers():
     if frame_change_handler in bpy.app.handlers.frame_change_pre:
         bpy.app.handlers.frame_change_pre.remove(frame_change_handler)
+    if added_3d_group_selection_handler in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.remove(added_3d_group_selection_handler)

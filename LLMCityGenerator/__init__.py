@@ -16,6 +16,12 @@ from .operators import (
 
     # dA_add
     CG_OT_Apply_Scene_Template,
+    CG_OT_Apply_Layout_Template,
+    CG_OT_Apply_Road_Texture,
+    CG_OT_Apply_Pavement_Texture,
+    # dA_5_add
+    CG_OT_Apply_Added_3D_Asset,
+    CG_OT_Apply_Selected_3D_Asset_Group,
 )
 from .panels import (
     CG_PT_Main_Panel,
@@ -36,6 +42,12 @@ from .panels import (
 
     # dA_add
     CG_Template_Panel,
+    CG_Layout_Template_Panel,
+    CG_Texture_2D_Panel,
+    CG_Road_Texture_Panel,
+    CG_Pavement_Texture_Panel,
+    # dA_5_add
+    CG_Added_3D_Assets_Panel,
 )
 from .properties import register_scene_properties, unregister_scene_properties
 from .handlers import register_handlers, unregister_handlers
@@ -61,6 +73,17 @@ classes = [
     # dA_add
     CG_Template_Panel,
     CG_OT_Apply_Scene_Template,
+    CG_Layout_Template_Panel,
+    CG_OT_Apply_Layout_Template,
+    CG_Texture_2D_Panel,
+    CG_Road_Texture_Panel,
+    CG_OT_Apply_Road_Texture,
+    CG_Pavement_Texture_Panel,
+    CG_OT_Apply_Pavement_Texture,
+    # dA_5_add
+    CG_Added_3D_Assets_Panel,
+    CG_OT_Apply_Added_3D_Asset,
+    CG_OT_Apply_Selected_3D_Asset_Group,
 
     CG_General_Setting_Panel,
     CG_Street_Setting_Panel,

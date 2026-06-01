@@ -19,3 +19,11 @@ from .night_lighting import CG_Night_Lighting_Panel, InteriorPanel
 
 # dA_add
 from .template_panel import CG_Template_Panel
+from .layout_template_panel import CG_Layout_Template_Panel
+from .road_texture_panel import (
+    CG_Pavement_Texture_Panel,
+    CG_Road_Texture_Panel,
+    CG_Texture_2D_Panel,
+)
+# dA_5_add
+from .furniture_asset_panel import CG_Added_3D_Assets_Panel
