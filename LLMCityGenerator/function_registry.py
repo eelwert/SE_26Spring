@@ -347,6 +347,102 @@ def _handle_toggle_buildings(params, context):
     return {"success": False, "results": [f"设置失败: {err}"]}
 
 
+# --- Member C: Ecological Scene handlers ---
+
+def _handle_generate_terrain(params, context):
+    scene = context.scene
+    if "hill_height" in params:
+        scene.cg_terrain_hill_height = float(params["hill_height"])
+    if "noise_scale" in params:
+        scene.cg_terrain_noise_scale = float(params["noise_scale"])
+    if "grid_size" in params:
+        scene.cg_terrain_grid_size = float(params["grid_size"])
+    if "subdivisions" in params:
+        scene.cg_terrain_subdivisions = int(params["subdivisions"])
+    bpy.ops.cg.eco_generate_terrain()
+    return {"success": True, "results": [f"地形已生成（高度={scene.cg_terrain_hill_height}m）"]}
+
+
+def _handle_generate_lake(params, context):
+    scene = context.scene
+    if "lake_size" in params:
+        scene.cg_lake_size = float(params["lake_size"])
+    if "ripple_strength" in params:
+        scene.cg_lake_ripple_strength = float(params["ripple_strength"])
+    if "water_color" in params and isinstance(params["water_color"], list):
+        scene.cg_lake_water_color = tuple(params["water_color"])
+    bpy.ops.cg.eco_generate_lake()
+    return {"success": True, "results": [f"湖泊已生成（大小={scene.cg_lake_size}m）"]}
+
+
+def _handle_generate_river(params, context):
+    scene = context.scene
+    if "river_width" in params:
+        scene.cg_river_width = float(params["river_width"])
+    if "seed" in params:
+        scene.cg_river_seed = int(params["seed"])
+    bpy.ops.cg.eco_generate_river()
+    return {"success": True, "results": [f"河流已生成（宽度={scene.cg_river_width}m）"]}
+
+
+def _handle_add_boat(params, context):
+    scene = context.scene
+    if "boat_scale" in params:
+        scene.cg_boat_scale = float(params["boat_scale"])
+    if "flow_speed" in params:
+        scene.cg_river_flow_speed = float(params["flow_speed"])
+    bpy.ops.cg.eco_add_boat()
+    return {"success": True, "results": ["船只已添加到河流路径上"]}
+
+
+# --- Member D: Dynamic Simulation handlers ---
+
+def _handle_start_simulation(params, context):
+    scene = context.scene
+    if "car_density" in params:
+        scene.cg_car_density = float(params["car_density"])
+    if "car_speed_min" in params:
+        scene.cg_car_speed_min = float(params["car_speed_min"])
+    if "car_speed_max" in params:
+        scene.cg_car_speed_max = float(params["car_speed_max"])
+    if "pedestrian_density" in params:
+        scene.cg_pedestrian_density = float(params["pedestrian_density"])
+    if "traffic_light_green" in params:
+        scene.cg_traffic_light_green = float(params["traffic_light_green"])
+    bpy.ops.cg.add_dynamic_elements()
+    return {"success": True, "results": ["仿真已启动（车辆+行人+红绿灯）"]}
+
+
+def _handle_stop_simulation(params, context):
+    bpy.ops.cg.remove_dynamic_elements()
+    return {"success": True, "results": ["仿真已停止，所有动态元素已清除"]}
+
+
+# --- Member D: Layout handlers ---
+
+def _handle_apply_layout(params, context):
+    scene = context.scene
+    if "points" in params:
+        pts = params["points"]
+        if isinstance(pts, list):
+            scene.cg_layout_points_text = ";".join(
+                f"{p[0]},{p[1]}" if isinstance(p, (list, tuple)) else str(p)
+                for p in pts
+            )
+    bpy.ops.cg.apply_point_layout()
+    return {"success": True, "results": ["道路布局已生成"]}
+
+
+def _handle_sketch_layout(params, context):
+    scene = context.scene
+    if "image_path" in params:
+        scene.cg_sketch_image_path = str(params["image_path"])
+    if "threshold" in params:
+        scene.cg_sketch_threshold = int(params["threshold"])
+    bpy.ops.cg.apply_sketch_layout()
+    return {"success": True, "results": ["草图布局提取已完成"]}
+
+
 # --- Registry ---
 
 FUNCTION_REGISTRY = {
@@ -496,6 +592,112 @@ FUNCTION_REGISTRY = {
         "schemaSummary": "enable",
         "parameters": {"enable": {"type": "boolean", "description": "true=启用, false=禁用", "required": True}},
         "handler": _handle_toggle_buildings,
+    },
+    # --- Member C: Ecological Scene ---
+    "generate_terrain": {
+        "name": "generate_terrain",
+        "title": "生成山丘地形",
+        "category": "environment",
+        "description": "程序化生成有起伏的地形（噪声位移）",
+        "risk": "low",
+        "schemaSummary": "hill_height, noise_scale, grid_size",
+        "parameters": {
+            "hill_height": {"type": "number", "description": "山丘高度（米）", "required": False},
+            "noise_scale": {"type": "number", "description": "噪声缩放（0.1-5.0）", "required": False},
+            "grid_size": {"type": "number", "description": "地形网格大小（米）", "required": False},
+        },
+        "handler": _handle_generate_terrain,
+    },
+    "generate_lake": {
+        "name": "generate_lake",
+        "title": "生成湖泊",
+        "category": "environment",
+        "description": "生成圆形湖泊水面（含波纹材质）",
+        "risk": "low",
+        "schemaSummary": "lake_size, ripple_strength",
+        "parameters": {
+            "lake_size": {"type": "number", "description": "湖泊大小（半径米）", "required": False},
+            "ripple_strength": {"type": "number", "description": "波纹强度 (0-1)", "required": False},
+        },
+        "handler": _handle_generate_lake,
+    },
+    "generate_river": {
+        "name": "generate_river",
+        "title": "生成河流",
+        "category": "environment",
+        "description": "沿曲线生成河流水面路径",
+        "risk": "low",
+        "schemaSummary": "river_width, seed",
+        "parameters": {
+            "river_width": {"type": "number", "description": "河流宽度（米）", "required": False},
+            "seed": {"type": "integer", "description": "随机种子", "required": False},
+        },
+        "handler": _handle_generate_river,
+    },
+    "add_boat": {
+        "name": "add_boat",
+        "title": "添加船只",
+        "category": "environment",
+        "description": "在河流上添加动态船只（沿路径移动）",
+        "risk": "low",
+        "schemaSummary": "boat_scale, flow_speed",
+        "parameters": {
+            "boat_scale": {"type": "number", "description": "船只缩放比例", "required": False},
+            "flow_speed": {"type": "number", "description": "水流速度", "required": False},
+        },
+        "handler": _handle_add_boat,
+    },
+    # --- Member D: Dynamic Simulation ---
+    "start_simulation": {
+        "name": "start_simulation",
+        "title": "启动交通仿真",
+        "category": "simulation",
+        "description": "启动车辆+行人+红绿灯的动态仿真",
+        "risk": "medium",
+        "schemaSummary": "car_density, pedestrian_density, car_speed_min, car_speed_max",
+        "parameters": {
+            "car_density": {"type": "number", "description": "车辆密度", "required": False},
+            "car_speed_min": {"type": "number", "description": "最低车速 km/h", "required": False},
+            "car_speed_max": {"type": "number", "description": "最高车速 km/h", "required": False},
+            "pedestrian_density": {"type": "number", "description": "行人密度", "required": False},
+        },
+        "handler": _handle_start_simulation,
+    },
+    "stop_simulation": {
+        "name": "stop_simulation",
+        "title": "停止仿真",
+        "category": "simulation",
+        "description": "停止仿真并清除所有动态元素",
+        "risk": "low",
+        "schemaSummary": "none",
+        "parameters": {},
+        "handler": _handle_stop_simulation,
+    },
+    # --- Member D: Road Layout ---
+    "apply_layout": {
+        "name": "apply_layout",
+        "title": "应用坐标布局",
+        "category": "layout",
+        "description": "根据手动坐标点集生成道路布局",
+        "risk": "medium",
+        "schemaSummary": "points",
+        "parameters": {
+            "points": {"type": "array", "description": "坐标点列表 [[x,y],[x,y],...]", "required": False},
+        },
+        "handler": _handle_apply_layout,
+    },
+    "sketch_layout": {
+        "name": "sketch_layout",
+        "title": "草图提取布局",
+        "category": "layout",
+        "description": "从草图图像提取道路拓扑并生成布局",
+        "risk": "medium",
+        "schemaSummary": "image_path, threshold",
+        "parameters": {
+            "image_path": {"type": "string", "description": "草图图像文件路径", "required": True},
+            "threshold": {"type": "integer", "description": "边缘检测阈值", "required": False},
+        },
+        "handler": _handle_sketch_layout,
     },
 }
 
