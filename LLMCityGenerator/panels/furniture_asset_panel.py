@@ -28,6 +28,7 @@ class CG_Added_3D_Assets_Panel(bpy.types.Panel):
             row.prop(scene, "added_3d_group_edit_min_count", text="Min Count")
             row.prop(scene, "added_3d_group_edit_max_count", text="Max Count")
             box.prop(scene, "added_3d_group_edit_spacing", text="Spacing")
+            box.prop(scene, "added_3d_group_edit_randomize", text="Random Layout")
             box.prop(scene, "added_3d_group_edit_scale", text="Scale")
             box.prop(scene, "added_3d_group_edit_placement_offset", text="Placement Offset")
 
@@ -50,6 +51,9 @@ class CG_Added_3D_Assets_Panel(bpy.types.Panel):
         box.prop(scene, "added_3d_asset_scale", text="Scale")
         box.prop(scene, "added_3d_asset_placement_offset", text="Placement Offset")
         box.prop(scene, "added_3d_asset_clear_previous", text="Replace Same Asset")
+
+        row = box.row()
+        row.operator("cg.delete_selected_mesh_3d_asset", text="Delete All Current Asset", icon="TRASH")
 
         row = box.row()
         row.scale_y = 1.5

@@ -1,7 +1,11 @@
 # dA_5_add
 import bpy
 
-from ..furniture_asset_engine import apply_added_3d_asset, reapply_selected_added_3d_group
+from ..furniture_asset_engine import (
+    apply_added_3d_asset,
+    delete_added_3d_asset_on_city,
+    reapply_selected_added_3d_group,
+)
 
 
 # dA_5_add
@@ -53,6 +57,7 @@ class CG_OT_Apply_Selected_3D_Asset_Group(bpy.types.Operator):
                 spacing=scene.added_3d_group_edit_spacing,
                 scale=scene.added_3d_group_edit_scale,
                 placement_offset=scene.added_3d_group_edit_placement_offset,
+                randomize=scene.added_3d_group_edit_randomize,
             )
         except Exception as exc:
             self.report({"ERROR"}, str(exc))
@@ -61,5 +66,27 @@ class CG_OT_Apply_Selected_3D_Asset_Group(bpy.types.Operator):
         self.report(
             {"INFO"},
             f"Updated selected group: {result['count']} instances",
+        )
+        return {"FINISHED"}
+
+
+# dA_5_add
+class CG_OT_Delete_Selected_Mesh_3D_Asset(bpy.types.Operator):
+    bl_idname = "cg.delete_selected_mesh_3d_asset"
+    bl_label = "Delete All Current Asset"
+    bl_description = "Delete all instances of the currently selected added 3D asset on the active City Generator mesh"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        scene = context.scene
+        try:
+            result = delete_added_3d_asset_on_city(context, scene.added_3d_asset_id)
+        except Exception as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
+
+        self.report(
+            {"INFO"},
+            f"Deleted {result['deleted_count']} instances of {result['asset_name']}",
         )
         return {"FINISHED"}

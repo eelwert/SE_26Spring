@@ -82,6 +82,7 @@ def _get_or_create_generated_collection(context):
 
 # dA_5_add
 def _clear_generated_instances(asset_id=None, group_id=None, city_object_name=None):
+    deleted_count = 0
     for obj in list(bpy.data.objects):
         if not obj.get("cg_added_3d_asset_instance"):
             continue
@@ -91,6 +92,8 @@ def _clear_generated_instances(asset_id=None, group_id=None, city_object_name=No
             if city_object_name is not None and obj.get("cg_added_3d_city_object") != city_object_name:
                 continue
             bpy.data.objects.remove(obj, do_unlink=True)
+            deleted_count += 1
+    return deleted_count
 
 
 # dA_5_add
@@ -1150,7 +1153,19 @@ def _unpack_placement_item(item, fallback_group_id=None):
 
 
 # dA_5_add
-def _street_edge_points(context, obj, asset, min_count, max_count, spacing, min_distance, randomize=False, placement_offset=0.0, boundary_margin=0.0):
+def _street_edge_points(
+    context,
+    obj,
+    asset,
+    min_count,
+    max_count,
+    spacing,
+    min_distance,
+    randomize=False,
+    placement_offset=0.0,
+    boundary_margin=0.0,
+    target_unit_id=None,
+):
     segments = _merged_street_segments(context, obj, asset, placement_offset, randomize=randomize)
     if not segments:
         return []
@@ -1163,6 +1178,8 @@ def _street_edge_points(context, obj, asset, min_count, max_count, spacing, min_
 
     for segment_index, segment in enumerate(segments):
         unit_id = f"street_edge_segment_{segment_index:03d}"
+        if target_unit_id is not None and unit_id != target_unit_id:
+            continue
         segment_rng = random.Random(f"{time.time_ns()}|{segment_index}|{unit_id}|{rng.random()}")
         target_count = _count_for_unit(segment_rng, min_count, max_count)
         axis_limits = _segment_axis_limits(segment, boundary_margin)
@@ -1368,7 +1385,19 @@ def _unique_instance_name(asset_key, index):
 
 
 # dA_5_add
-def _sample_from_surface(context, obj, asset, min_count, max_count, spacing, min_distance, randomize=False, placement_offset=0.0, boundary_margin=0.0):
+def _sample_from_surface(
+    context,
+    obj,
+    asset,
+    min_count,
+    max_count,
+    spacing,
+    min_distance,
+    randomize=False,
+    placement_offset=0.0,
+    boundary_margin=0.0,
+    target_unit_id=None,
+):
     street_points = _street_edge_points(
         context,
         obj,
@@ -1380,9 +1409,12 @@ def _sample_from_surface(context, obj, asset, min_count, max_count, spacing, min
         randomize=randomize,
         placement_offset=placement_offset,
         boundary_margin=boundary_margin,
+        target_unit_id=target_unit_id,
     )
     if street_points:
         return street_points
+    if target_unit_id is not None:
+        return []
 
     candidates = _surface_candidates(context, obj, asset)
     if not candidates:
@@ -1469,7 +1501,19 @@ def _sample_rectangle_perimeter(min_x, max_x, min_y, max_y, z, count, spacing):
 
 
 # dA_5_add
-def _placement_points(context, obj, asset, min_count, max_count, spacing, min_distance, randomize=False, placement_offset=0.0, boundary_margin=0.0):
+def _placement_points(
+    context,
+    obj,
+    asset,
+    min_count,
+    max_count,
+    spacing,
+    min_distance,
+    randomize=False,
+    placement_offset=0.0,
+    boundary_margin=0.0,
+    target_unit_id=None,
+):
     surface_points = _sample_from_surface(
         context,
         obj,
@@ -1481,9 +1525,12 @@ def _placement_points(context, obj, asset, min_count, max_count, spacing, min_di
         randomize=randomize,
         placement_offset=placement_offset,
         boundary_margin=boundary_margin,
+        target_unit_id=target_unit_id,
     )
     if surface_points:
         return surface_points
+    if target_unit_id is not None:
+        return []
 
     reference_points = _sample_from_street_references(
         context,
@@ -1587,6 +1634,7 @@ def apply_added_3d_asset(
         randomize=bool(randomize),
         placement_offset=float(placement_offset),
         boundary_margin=boundary_margin,
+        target_unit_id=target_unit_id,
     )
     created = []
     batch_id = (
@@ -1692,6 +1740,7 @@ def reapply_selected_added_3d_group(
     spacing=None,
     scale=None,
     placement_offset=None,
+    randomize=None,
 ):
     group = selected_added_3d_group(context)
     if group is None:
@@ -1705,9 +1754,27 @@ def reapply_selected_added_3d_group(
         spacing=group["spacing"] if spacing is None else spacing,
         scale=group["scale"] if scale is None else scale,
         placement_offset=group["placement_offset"] if placement_offset is None else placement_offset,
-        randomize=group["randomize"],
+        randomize=group["randomize"] if randomize is None else randomize,
         clear_previous=True,
         target_group_id=group["group_id"],
         target_unit_id=group["unit_id"],
         city_object_name=group["city_object_name"],
     )
+
+
+# dA_5_add
+def delete_added_3d_asset_on_city(context, asset_id, city_object_name=None):
+    asset_key = str(asset_id)
+    asset = CITY_3D_ASSETS.get(asset_key)
+    if asset is None:
+        raise ValueError(f"3D asset '{asset_key}' does not exist.")
+
+    obj = _get_city_object(context, object_name=city_object_name)
+    deleted_count = _clear_generated_instances(asset_key, city_object_name=obj.name)
+    context.view_layer.update()
+    return {
+        "asset_id": asset_key,
+        "asset_name": asset["label"],
+        "city_object_name": obj.name,
+        "deleted_count": deleted_count,
+    }

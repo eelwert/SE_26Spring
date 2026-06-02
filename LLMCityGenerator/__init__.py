@@ -33,6 +33,7 @@ from .operators import (
     # dA_5_add
     CG_OT_Apply_Added_3D_Asset,
     CG_OT_Apply_Selected_3D_Asset_Group,
+    CG_OT_Delete_Selected_Mesh_3D_Asset,
 )
 from .panels import (
     CG_PT_Main_Panel,
@@ -105,7 +106,8 @@ classes = [
     CG_Added_3D_Assets_Panel,
     CG_OT_Apply_Added_3D_Asset,
     CG_OT_Apply_Selected_3D_Asset_Group,
-
+    CG_OT_Delete_Selected_Mesh_3D_Asset,
+    
     CG_General_Setting_Panel,
     CG_Street_Setting_Panel,
     CG_Park_Setting_Panel,

@@ -740,6 +740,11 @@ def register_scene_properties():
         max=200.0,
         subtype="DISTANCE",
     )
+    bpy.types.Scene.added_3d_group_edit_randomize = bpy.props.BoolProperty(
+        name="Random Layout",
+        description="Randomize placement within the selected generated 3D asset group",
+        default=False,
+    )
     bpy.types.Scene.added_3d_group_edit_scale = bpy.props.FloatProperty(
         name="Scale",
         description="Uniform scale for the selected generated 3D asset group",
@@ -813,6 +818,7 @@ def unregister_scene_properties():
     del bpy.types.Scene.added_3d_group_edit_min_count
     del bpy.types.Scene.added_3d_group_edit_max_count
     del bpy.types.Scene.added_3d_group_edit_spacing
+    del bpy.types.Scene.added_3d_group_edit_randomize
     del bpy.types.Scene.added_3d_group_edit_scale
     del bpy.types.Scene.added_3d_group_edit_placement_offset
     del bpy.types.Scene.added_3d_active_group_id

@@ -78,6 +78,7 @@ def added_3d_group_selection_handler(scene, depsgraph):
             scene.added_3d_group_edit_min_count = int(active.get("cg_added_3d_group_min_count", len(group_instances)))
             scene.added_3d_group_edit_max_count = int(active.get("cg_added_3d_group_max_count", len(group_instances)))
             scene.added_3d_group_edit_spacing = float(active.get("cg_added_3d_group_spacing", 5.0))
+            scene.added_3d_group_edit_randomize = bool(active.get("cg_added_3d_group_randomize", False))
             scene.added_3d_group_edit_scale = float(active.get("cg_added_3d_group_ui_scale", 1.0))
             scene.added_3d_group_edit_placement_offset = float(active.get("cg_added_3d_group_placement_offset", 0.0))
     finally:
