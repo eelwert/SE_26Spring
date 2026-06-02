@@ -502,30 +502,50 @@ def _handle_apply_pavement_texture(params, context):
 
 
 def _handle_place_furniture(params, context):
+    """Place 3D furniture with all panel-exposed parameters."""
     scene = context.scene
     valid_assets = {"wooden_picnic_table", "small_lpg_tank", "rubber_duck_toy"}
     if "asset_id" in params:
         aid = str(params["asset_id"])
         if aid not in valid_assets:
-            aid = "wooden_picnic_table"  # fallback to default
+            aid = "wooden_picnic_table"
         scene.added_3d_asset_id = aid
-    if "count" in params:
-        c = int(params["count"])
-        scene.added_3d_asset_min_count = c
-        scene.added_3d_asset_max_count = c
+    if "min_count" in params:
+        scene.added_3d_asset_min_count = int(params["min_count"])
+    if "max_count" in params:
+        scene.added_3d_asset_max_count = int(params["max_count"])
     if "spacing" in params:
         scene.added_3d_asset_spacing = float(params["spacing"])
     if "scale" in params:
         scene.added_3d_asset_scale = float(params["scale"])
-    # Ensure object with CG modifier is active
-    mod = _get_active_mod(context)
-    if mod:
-        bpy.context.view_layer.objects.active = mod.id_data
+    if "randomize" in params:
+        scene.added_3d_asset_randomize = bool(params["randomize"])
+    if "placement_offset" in params:
+        scene.added_3d_asset_placement_offset = float(params["placement_offset"])
+    if "clear_previous" in params:
+        scene.added_3d_asset_clear_previous = bool(params["clear_previous"])
+    _ensure_cg_active(context)
     try:
         bpy.ops.cg.apply_added_3d_asset()
-        return {"success": True, "results": ["家具资产已放置"]}
+        return {"success": True, "results": [f"家具「{scene.added_3d_asset_id}」已放置"]}
     except Exception as e:
         return {"success": False, "results": [f"家具放置失败: {str(e)}"]}
+
+
+def _handle_delete_furniture(params, context):
+    """Delete all placed instances of a specific 3D asset type."""
+    scene = context.scene
+    valid_assets = {"wooden_picnic_table", "small_lpg_tank", "rubber_duck_toy"}
+    if "asset_id" in params:
+        aid = str(params["asset_id"])
+        if aid in valid_assets:
+            scene.added_3d_asset_id = aid
+    _ensure_cg_active(context)
+    try:
+        bpy.ops.cg.delete_selected_mesh_3d_asset()
+        return {"success": True, "results": [f"已删除所有「{scene.added_3d_asset_id}」资产"]}
+    except Exception as e:
+        return {"success": False, "results": [f"删除失败: {str(e)}"]}
 
 
 def _handle_apply_layout_template(params, context):
@@ -863,16 +883,32 @@ FUNCTION_REGISTRY = {
         "name": "place_furniture",
         "title": "放置城市家具",
         "category": "asset",
-        "description": "在城市对象周围放置 3D 家具（垃圾桶/长椅/燃气罐等）",
+        "description": "在城市对象周围放置 3D 家具（野餐椅/小消防罐/小黄鸭）",
         "risk": "low",
-        "schemaSummary": "asset_id, count, spacing",
+        "schemaSummary": "asset_id, min_count, max_count, spacing, scale, randomize, placement_offset, clear_previous",
         "parameters": {
-            "asset_id": {"type": "integer", "description": "家具资产ID", "required": False},
-            "count": {"type": "integer", "description": "放置数量", "required": False},
-            "spacing": {"type": "number", "description": "间距", "required": False},
-            "scale": {"type": "number", "description": "缩放", "required": False},
+            "asset_id": {"type": "string", "description": "资产: wooden_picnic_table(野餐椅)/small_lpg_tank(小消防罐)/rubber_duck_toy(小黄鸭)", "required": False},
+            "min_count": {"type": "integer", "description": "最少放置数量", "required": False},
+            "max_count": {"type": "integer", "description": "最多放置数量", "required": False},
+            "spacing": {"type": "number", "description": "资产间距（米）", "required": False},
+            "scale": {"type": "number", "description": "缩放比例", "required": False},
+            "randomize": {"type": "boolean", "description": "是否随机布局", "required": False},
+            "placement_offset": {"type": "number", "description": "放置偏移（米）", "required": False},
+            "clear_previous": {"type": "boolean", "description": "是否清除同类旧资产", "required": False},
         },
         "handler": _handle_place_furniture,
+    },
+    "delete_furniture": {
+        "name": "delete_furniture",
+        "title": "删除新增城市家具",
+        "category": "asset",
+        "description": "删除之前通过 place_furniture 新增到当前 CG 网格上的指定类型 3D 家具（野餐椅/小消防罐/小黄鸭）",
+        "risk": "low",
+        "schemaSummary": "asset_id",
+        "parameters": {
+            "asset_id": {"type": "string", "description": "资产: wooden_picnic_table(野餐椅)/small_lpg_tank(小消防罐)/rubber_duck_toy(小黄鸭)", "required": True},
+        },
+        "handler": _handle_delete_furniture,
     },
     # --- Member A: Layout Template ---
     "apply_layout_template": {

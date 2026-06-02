@@ -331,12 +331,14 @@ def parse_local(user_text):
         functions.append({"name": "set_sidewalk_scale", "params": {"scale": float(m.group(1))}})
 
     # --- Furniture ---
-    if "垃圾桶" in text or "家具" in text:
-        functions.append({"name": "place_furniture", "params": {"asset_id": "small_lpg_tank", "count": 8}})
+    if "删除家具" in text or "清除家具" in text or "删除资产" in text:
+        functions.append({"name": "delete_furniture", "params": {"asset_id": "wooden_picnic_table"}})
     elif "长椅" in text or "桌椅" in text:
-        functions.append({"name": "place_furniture", "params": {"asset_id": "wooden_picnic_table", "count": 8}})
-    elif "燃气罐" in text or "煤气罐" in text:
-        functions.append({"name": "place_furniture", "params": {"asset_id": "small_lpg_tank", "count": 6}})
+        functions.append({"name": "place_furniture", "params": {"asset_id": "wooden_picnic_table", "min_count": 5, "max_count": 10, "randomize": True}})
+    elif "消防罐" in text or "燃气罐" in text or "煤气罐" in text:
+        functions.append({"name": "place_furniture", "params": {"asset_id": "small_lpg_tank", "min_count": 3, "max_count": 8, "randomize": True}})
+    elif "小黄鸭" in text:
+        functions.append({"name": "place_furniture", "params": {"asset_id": "rubber_duck_toy", "min_count": 5, "max_count": 15, "randomize": True}})
 
     explanation = f"本地解析完成，识别到 {len(functions)} 个操作"
     if not functions:

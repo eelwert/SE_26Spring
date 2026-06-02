@@ -43,7 +43,8 @@ FUNCTION_LIST = [
     {"name": "apply_scene_template", "params": {"template_id": "int 0-2"}},
     {"name": "apply_road_texture", "params": {"texture_id": "int"}},
     {"name": "apply_pavement_texture", "params": {"texture_id": "int"}},
-    {"name": "place_furniture", "params": {"asset_id": "int", "count": "int", "spacing": "number"}},
+    {"name": "delete_furniture", "params": {"asset_id": "string"}},
+    {"name": "place_furniture", "params": {"asset_id": "string", "min_count": "int", "max_count": "int", "spacing": "number", "scale": "number", "randomize": "bool", "placement_offset": "number", "clear_previous": "bool"}},
     {"name": "apply_layout_template", "params": {"layout_id": "int", "rows": "int", "columns": "int"}},
     # Member C
     {"name": "generate_terrain", "params": {"hill_height": "number", "noise_scale": "number"}},
@@ -96,7 +97,7 @@ def parse_command(text: str, modalities: list[str], attachment_names: list[str],
         zhipu_key = os.environ.get("ZHIPU_API_KEY", "")
         if zhipu_key:
             # If text is also provided, screenshot gets its own independent instruction
-            instruction = text if not has_text else "请独立分析这张城市场景截图。你的任务是让Blender城市贴近截图：截图里有什么就设置什么，截图里没有的不要额外添加。观察道路宽度、车道数、建筑高度、树木密度、天气时间、路灯、3D家具（垃圾桶映射wooden_picnic_table/小黄鸭rubber_duck_toy/燃气罐small_lpg_tank）、地形湖泊河流、车辆行人，估算参数值并生成函数调用。"
+            instruction = text if not has_text else "请独立分析这张城市场景截图。你的任务是让Blender城市贴近截图：截图里有什么就设置什么，截图里没有的不要额外添加。观察道路宽度、车道数、建筑高度、树木密度、天气时间、路灯、3D家具（野餐椅/小消防罐/小黄鸭）、地形湖泊河流、车辆行人，估算参数值并生成函数调用。"
             screenshot_result = _analyze_screenshot(image_base64, instruction, zhipu_key)
 
     # Analyse text if present
