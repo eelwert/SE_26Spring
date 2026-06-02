@@ -70,9 +70,18 @@ def _build_set_code(var_name, key, value):
 
 
 def _get_active_mod(context):
-    """Get the GN modifier from the active object."""
+    """Get the City_Generator_2.0 modifier — searches all objects, not just active."""
+    # First try the active object
     obj = context.object if hasattr(context, 'object') else context.view_layer.objects.active
-    return _get_modifier(obj)
+    mod = _get_modifier(obj)
+    if mod:
+        return mod
+    # Search all objects in the scene
+    for obj in context.scene.objects if hasattr(context, 'scene') else bpy.data.objects:
+        mod = _get_modifier(obj)
+        if mod:
+            return mod
+    return None
 
 
 # --- Template definitions (0-9) ---
@@ -400,17 +409,20 @@ def _handle_add_boat(params, context):
 def _handle_start_simulation(params, context):
     scene = context.scene
     if "car_density" in params:
-        scene.cg_car_density = float(params["car_density"])
+        scene.cg_car_density = int(params["car_density"])
     if "car_speed_min" in params:
-        scene.cg_car_speed_min = float(params["car_speed_min"])
+        scene.cg_car_speed_min = int(params["car_speed_min"])
     if "car_speed_max" in params:
-        scene.cg_car_speed_max = float(params["car_speed_max"])
+        scene.cg_car_speed_max = int(params["car_speed_max"])
     if "pedestrian_density" in params:
-        scene.cg_pedestrian_density = float(params["pedestrian_density"])
+        scene.cg_pedestrian_density = int(params["pedestrian_density"])
     if "traffic_light_green" in params:
-        scene.cg_traffic_light_green = float(params["traffic_light_green"])
-    bpy.ops.cg.add_dynamic_elements()
-    return {"success": True, "results": ["仿真已启动（车辆+行人+红绿灯）"]}
+        scene.cg_traffic_light_green = int(params["traffic_light_green"])
+    try:
+        bpy.ops.cg.add_dynamic_elements()
+        return {"success": True, "results": ["仿真已启动（车辆+行人+红绿灯）"]}
+    except Exception as e:
+        return {"success": False, "results": [f"仿真启动失败: {str(e)}"]}
 
 
 def _handle_stop_simulation(params, context):
@@ -445,8 +457,20 @@ def _handle_sketch_layout(params, context):
 
 # --- Member A: Template, Texture, Asset handlers ---
 
+def _ensure_cg_active(context):
+    """Make the object with CG modifier the active object. Returns the modifier or None."""
+    mod = _get_active_mod(context)
+    if mod:
+        try:
+            context.view_layer.objects.active = mod.id_data
+        except Exception:
+            pass
+    return mod
+
+
 def _handle_apply_scene_template(params, context):
     template_id = str(params.get("template_id", 0))
+    _ensure_cg_active(context)
     from .template_engine import apply_scene_template_function
     try:
         result = apply_scene_template_function(context, template_id)
@@ -457,6 +481,7 @@ def _handle_apply_scene_template(params, context):
 
 def _handle_apply_road_texture(params, context):
     tid = int(params.get("texture_id", 0))
+    _ensure_cg_active(context)
     context.scene.road_texture_id = tid
     try:
         bpy.ops.cg.apply_road_texture()
@@ -467,6 +492,7 @@ def _handle_apply_road_texture(params, context):
 
 def _handle_apply_pavement_texture(params, context):
     tid = int(params.get("texture_id", 0))
+    _ensure_cg_active(context)
     context.scene.pavement_texture_id = tid
     try:
         bpy.ops.cg.apply_pavement_texture()
@@ -477,15 +503,12 @@ def _handle_apply_pavement_texture(params, context):
 
 def _handle_place_furniture(params, context):
     scene = context.scene
-    # asset_id is a string enum: "wooden_picnic_table", "metal_trash_can", etc.
+    valid_assets = {"wooden_picnic_table", "small_lpg_tank", "rubber_duck_toy"}
     if "asset_id" in params:
-        aid = params["asset_id"]
-        if isinstance(aid, int) or (isinstance(aid, str) and aid.isdigit()):
-            # Map integer to enum: 0=table, 1=trash_can, 2=duck, 3=tank
-            mapping = {"0": "wooden_picnic_table", "1": "metal_trash_can",
-                       "2": "rubber_duck_toy", "3": "small_lpg_tank"}
-            aid = mapping.get(str(aid), "wooden_picnic_table")
-        scene.added_3d_asset_id = str(aid)
+        aid = str(params["asset_id"])
+        if aid not in valid_assets:
+            aid = "wooden_picnic_table"  # fallback to default
+        scene.added_3d_asset_id = aid
     if "count" in params:
         c = int(params["count"])
         scene.added_3d_asset_min_count = c
@@ -494,6 +517,10 @@ def _handle_place_furniture(params, context):
         scene.added_3d_asset_spacing = float(params["spacing"])
     if "scale" in params:
         scene.added_3d_asset_scale = float(params["scale"])
+    # Ensure object with CG modifier is active
+    mod = _get_active_mod(context)
+    if mod:
+        bpy.context.view_layer.objects.active = mod.id_data
     try:
         bpy.ops.cg.apply_added_3d_asset()
         return {"success": True, "results": ["家具资产已放置"]}
@@ -721,6 +748,33 @@ FUNCTION_REGISTRY = {
         "handler": _handle_add_boat,
     },
     # --- Member D: Dynamic Simulation ---
+    "run_traffic_simulation": {
+        "name": "run_traffic_simulation",
+        "title": "车辆仿真调度",
+        "category": "simulation",
+        "description": "启动车辆交通仿真",
+        "risk": "medium",
+        "schemaSummary": "rules_version, seed",
+        "parameters": {
+            "rules_version": {"type": "string", "description": "规则版本", "required": False},
+            "seed": {"type": "integer", "description": "随机种子", "required": False},
+        },
+        "handler": _handle_start_simulation,
+    },
+    "run_crowd_simulation": {
+        "name": "run_crowd_simulation",
+        "title": "人群仿真调度",
+        "category": "simulation",
+        "description": "启动人群仿真",
+        "risk": "medium",
+        "schemaSummary": "rules_version, seed, agent_count",
+        "parameters": {
+            "rules_version": {"type": "string", "description": "规则版本", "required": False},
+            "seed": {"type": "integer", "description": "随机种子", "required": False},
+            "agent_count": {"type": "integer", "description": "行人数量", "required": False},
+        },
+        "handler": _handle_start_simulation,
+    },
     "start_simulation": {
         "name": "start_simulation",
         "title": "启动交通仿真",

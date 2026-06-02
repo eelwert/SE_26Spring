@@ -27,10 +27,25 @@ export function MultimodalPage() {
   } = useWorkspace();
   const [text, setText] = useState(promptPresets[0]);
   const [modalities, setModalities] = useState<Modality[]>(['text']);
-  const [attachments, setAttachments] = useState('sketch-river-road.png');
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [imageFileName, setImageFileName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDispatching, setIsDispatching] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setImageFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Strip "data:image/png;base64," prefix
+      const base64 = result.includes(',') ? result.split(',')[1] : result;
+      setImageBase64(base64);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const activeCommand = commands[0];
   const commandTasks = useMemo(
@@ -59,10 +74,8 @@ export function MultimodalPage() {
         sceneId: selectedSceneId,
         text,
         modalities,
-        attachmentNames: attachments
-          .split(',')
-          .map((item) => item.trim())
-          .filter(Boolean),
+        attachmentNames: imageFileName ? [imageFileName] : [],
+        imageBase64: imageBase64 ?? undefined,
       });
     } catch (caught) {
       setLocalError(caught instanceof Error ? caught.message : '多模态解析失败。');
@@ -115,9 +128,12 @@ export function MultimodalPage() {
             <Field label="自然语言指令">
               <textarea rows={7} value={text} onChange={(event) => setText(event.target.value)} />
             </Field>
-            <Field label="附件引用">
-              <input value={attachments} onChange={(event) => setAttachments(event.target.value)} />
-            </Field>
+            {modalities.includes('screenshot') || modalities.includes('sketch') ? (
+              <Field label="上传截图/草图">
+                <input type="file" accept="image/*" onChange={handleFileChange} />
+                {imageFileName ? <small style={{ color: '#4c1' }}>已选择: {imageFileName}</small> : null}
+              </Field>
+            ) : null}
             <Button type="submit" isLoading={isSubmitting}>
               <Send size={16} />
               解析指令

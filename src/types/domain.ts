@@ -328,6 +328,7 @@ export interface SubmitCommandRequest {
   text: string;
   modalities: Modality[];
   attachmentNames: string[];
+  imageBase64?: string;
 }
 
 export interface StartSimulationRequest {

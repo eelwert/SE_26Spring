@@ -82,26 +82,73 @@ SYSTEM_PROMPT = f"""你是智能城市生成系统的 AI 助手。将用户的�
 def parse_command(text: str, modalities: list[str], attachment_names: list[str], image_base64: str | None = None) -> dict:
     """Parse user instruction into a function plan.
 
-    - 'screenshot' modality → GLM-4V-Flash analyses the image
-    - 'text' modality → DeepSeek API or local parser
-    Returns dict with keys: plan, explanation, intentTag, confidence, slots, needsClarification.
+    When both text and screenshot are provided, BOTH are analyzed and merged.
+    If the same function appears in both, the TEXT version takes priority.
     """
-    # Screenshot modality: send image to GLM-4V-Flash
-    if "screenshot" in modalities and image_base64:
+    has_screenshot = "screenshot" in modalities and image_base64
+    has_text = text.strip() and len(text.strip()) >= 2
+
+    text_result = None
+    screenshot_result = None
+
+    # Analyse screenshot if present
+    if has_screenshot:
         zhipu_key = os.environ.get("ZHIPU_API_KEY", "")
         if zhipu_key:
-            result = _analyze_screenshot(image_base64, text, zhipu_key)
-            if result:
-                return result
+            # If text is also provided, screenshot gets its own independent instruction
+            instruction = text if not has_text else "请独立分析这张城市场景截图。你的任务是让Blender城市贴近截图：截图里有什么就设置什么，截图里没有的不要额外添加。观察道路宽度、车道数、建筑高度、树木密度、天气时间、路灯、3D家具（垃圾桶映射wooden_picnic_table/小黄鸭rubber_duck_toy/燃气罐small_lpg_tank）、地形湖泊河流、车辆行人，估算参数值并生成函数调用。"
+            screenshot_result = _analyze_screenshot(image_base64, instruction, zhipu_key)
 
-    # Text modality: DeepSeek API or fallback
-    api_key = os.environ.get("DEEPSEEK_API_KEY", "")
-    if api_key:
-        result = _call_llm(text, api_key)
-        if result:
-            return result
+    # Analyse text if present
+    if has_text:
+        api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+        if api_key:
+            text_result = _call_llm(text, api_key)
+        if not text_result:
+            text_result = _parse_local(text, modalities, attachment_names)
 
-    return _parse_local(text, modalities, attachment_names)
+    # Merge results
+    if text_result and screenshot_result:
+        return _merge_plans(text_result, screenshot_result)
+    elif screenshot_result:
+        return screenshot_result
+    elif text_result:
+        return text_result
+
+    # Ultimate fallback
+    return _parse_local(text, modalities, attachment_names) if has_text else {
+        "plan": [],
+        "explanation": "未能分析指令，请提供文本或截图。",
+        "intentTag": "unknown",
+        "confidence": 0,
+        "slots": {},
+        "needsClarification": True,
+    }
+
+
+def _merge_plans(text_plan: dict, screenshot_plan: dict) -> dict:
+    """Merge two plans: text takes priority on conflict, screenshot adds new.
+    Re-numbers node IDs to avoid React duplicate-key warnings."""
+    text_nodes = {n.get("funcName"): n for n in text_plan.get("plan", [])}
+    screenshot_nodes = {n.get("funcName"): n for n in screenshot_plan.get("plan", [])}
+
+    # Start with screenshot nodes, then override/add with text
+    merged = dict(screenshot_nodes)
+    merged.update(text_nodes)  # text wins on conflict
+
+    # Re-number IDs to avoid duplicates
+    plan = []
+    for i, node in enumerate(merged.values(), 1):
+        plan.append({**node, "id": f"node-{i}"})
+
+    return {
+        "plan": plan,
+        "explanation": f"[文本] {text_plan.get('explanation', '')}\n[截图] {screenshot_plan.get('explanation', '')}",
+        "intentTag": text_plan.get("intentTag", screenshot_plan.get("intentTag", "merged")),
+        "confidence": max(text_plan.get("confidence", 0), screenshot_plan.get("confidence", 0)),
+        "slots": {**screenshot_plan.get("slots", {}), **text_plan.get("slots", {})},
+        "needsClarification": False,
+    }
 
 
 def _analyze_screenshot(image_base64: str, user_text: str, api_key: str) -> dict | None:
@@ -142,24 +189,61 @@ def _analyze_screenshot(image_base64: str, user_text: str, api_key: str) -> dict
         return None
 
 
-VISION_SYSTEM_PROMPT = f"""你是智能城市生成系统的 AI 助手。分析用户上传的城市场景截图，根据图像内容生成函数调用 JSON。
+VISION_SYSTEM_PROMPT = f"""你是智能城市生成系统的 AI 助手。用户的截图展示了一个期望的城市场景。你的任务是分析截图中的要素，生成函数调用让 Blender 中的城市尽量贴近截图。
 
-可用函数：
+## 核心原则：复制截图中有的，不额外添加截图中没有的
+
+## 可用函数（共 28 个，必须从中选择）
+
 {json.dumps(FUNCTION_LIST, ensure_ascii=False, indent=2)}
 
-输出纯 JSON（不要 markdown）：
+## 分析步骤
+
+1. **先观察截图中有哪些要素**，再决定调用哪些函数
+2. **只调用截图中有对应依据的函数**——截图里没有湖泊就不要生成湖泊，没有山丘就不要生成山丘
+3. 参数值应该根据截图中的视觉特征估算，尽量贴近截图
+
+## 对照表
+
+| 截图特征 | 调用的函数 | 参数估算 |
+|---------|-----------|---------|
+| 道路看起来宽/窄 | set_street_width | 宽≈15m, 中≈10m, 窄≈6m |
+| 可见车道线数量 | set_lane_amount | 数车道线 |
+| 路边有停车 | set_parking_probability | 0.6-1.0 |
+| 路口圆角大/小 | set_corner_radius | 大≈5m, 小≈1m |
+| 建筑高/矮 | set_building_height | 高≈30m, 矮≈5m |
+| 树木密集/稀疏 | set_tree_density | 密≈0.9, 疏≈0.2 |
+| 晴天/阴天/雨天/傍晚 | set_weather_lighting | 直接映射 |
+| 路灯亮/灭 | set_street_lights | 亮=true, 灭=false |
+| 有车辆行人 | start_simulation | car_density根据车流量 |
+| 有垃圾桶 | place_furniture(asset_id="wooden_picnic_table") | count≈5-15 |
+| 有长椅/桌子 | place_furniture(asset_id="wooden_picnic_table") | count≈5-10 |
+| 有小黄鸭玩具 | place_furniture(asset_id="rubber_duck_toy") | count≈3-8 |
+| 有燃气罐 | place_furniture(asset_id="small_lpg_tank") | count≈3-8 |
+| 有山丘地形 | generate_terrain | hill_height根据起伏 |
+| 有湖泊 | generate_lake | lake_size根据大小 |
+| 有河流 | generate_river | river_width根据宽度 |
+| 有船只 | add_boat | — |
+| 滨水风格 | apply_scene_template(template_id=0) | — |
+| 商业街风格 | apply_scene_template(template_id=1) | — |
+| 交通枢纽风格 | apply_scene_template(template_id=2) | — |
+
+## 输出格式
+
+纯 JSON（不要 markdown）：
 {{
   "plan": [
-    {{"id": "node-1", "funcName": "set_street_width", "title": "调整道路宽度", "params": {{"width": 8}}}}
+    {{"id": "node-1", "funcName": "set_street_width", "title": "截图道路约6m", "params": {{"width": 6}}}},
+    {{"id": "node-2", "funcName": "set_building_height", "title": "截图建筑约15m", "params": {{"height": 15}}}}
   ],
-  "explanation": "从截图中观察到了...",
+  "explanation": "截图中观察到：双向2车道约6m宽，建筑约5层15m高，树木稀疏...",
   "intentTag": "screenshot_analysis",
   "confidence": 0.8,
   "slots": {{}},
   "needsClarification": false
 }}
 
-观察要点：道路宽度、车道数、建筑高度、树木密度、天气时间、路灯状态。只输出 JSON。"""
+只输出 JSON。"""
 
 
 def _call_llm(text: str, api_key: str) -> dict | None:
