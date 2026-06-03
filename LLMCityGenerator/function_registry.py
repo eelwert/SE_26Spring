@@ -104,9 +104,9 @@ TEMPLATES = {
 
 def _handle_apply_template(params, context):
     """Apply a template by ID to configure trees, road, and seats."""
-    template_id = int(params.get("template_id", 0))
-    tree_density = int(params.get("tree_density", 60))
-    road_width = int(params.get("road_width", 8))
+    template_id = _safe_int(params.get("template_id", 0), 0)
+    tree_density = _safe_int(params.get("tree_density", 60), 60)
+    road_width = _safe_int(params.get("road_width", 8), 8)
 
     template = TEMPLATES.get(template_id, TEMPLATES[0])
     mod = _get_active_mod(context)
@@ -167,7 +167,7 @@ def _handle_set_weather(params, context):
 
 
 def _handle_set_street_width(params, context):
-    width = float(params.get("width", 8))
+    width = _safe_float(params.get("width", 8), 8)
     mod = _get_active_mod(context)
     if not mod:
         return {"success": False, "results": ["未找到 City_Generator_2.0 修改器。请先导入并应用节点组。"]}
@@ -178,7 +178,7 @@ def _handle_set_street_width(params, context):
 
 
 def _handle_set_lane_amount(params, context):
-    lanes = int(params.get("lanes", 4))
+    lanes = _safe_int(params.get("lanes", 4), 4)
     mod = _get_active_mod(context)
     if not mod:
         return {"success": False, "results": ["未找到 City_Generator_2.0 修改器。"]}
@@ -191,7 +191,7 @@ def _handle_set_lane_amount(params, context):
 def _handle_set_tree_density(params, context):
     """Set park tree density (Socket_159) and street tree delete prob (Socket_172).
     Street tree delete is inverted: density 0 → delete prob 1 (remove all)."""
-    density = float(params.get("density", 0.5))
+    density = _safe_float(params.get("density", 0.5), 0.5)
     mod = _get_active_mod(context)
     if not mod:
         return {"success": False, "results": ["未找到 City_Generator_2.0 修改器。"]}
@@ -213,7 +213,7 @@ def _handle_set_tree_density(params, context):
 
 
 def _handle_set_sidewalk_scale(params, context):
-    scale = float(params.get("scale", 1.0))
+    scale = _safe_float(params.get("scale", 1.0), 1.0)
     mod = _get_active_mod(context)
     if not mod:
         return {"success": False, "results": ["未找到修改器。"]}
@@ -224,7 +224,7 @@ def _handle_set_sidewalk_scale(params, context):
 
 
 def _handle_set_corner_radius(params, context):
-    radius = float(params.get("radius", 3.0))
+    radius = _safe_float(params.get("radius", 3.0), 3.0)
     mod = _get_active_mod(context)
     if not mod:
         return {"success": False, "results": ["未找到修改器。"]}
@@ -235,7 +235,7 @@ def _handle_set_corner_radius(params, context):
 
 
 def _handle_set_parking_probability(params, context):
-    prob = float(params.get("probability", 0.5))
+    prob = _safe_float(params.get("probability", 0.5), 0.5)
     mod = _get_active_mod(context)
     if not mod:
         return {"success": False, "results": ["未找到修改器。"]}
@@ -258,7 +258,7 @@ def _handle_set_street_lights(params, context):
 
 
 def _handle_set_traffic_lights(params, context):
-    prob = float(params.get("probability", 0.6))
+    prob = _safe_float(params.get("probability", 0.6), 0.6)
     mod = _get_active_mod(context)
     if not mod:
         return {"success": False, "results": ["未找到修改器。"]}
@@ -270,7 +270,7 @@ def _handle_set_traffic_lights(params, context):
 
 def _handle_set_building_height(params, context):
     """Set Custom_Height face attribute on ALL faces of the active mesh."""
-    height = int(params.get("height", 10))
+    height = _safe_int(params.get("height", 10), 10)
     context.scene.height_value = height
     obj = context.object if hasattr(context, 'object') else context.view_layer.objects.active
     if not obj or obj.type != 'MESH':
@@ -311,7 +311,7 @@ def _handle_set_building_height(params, context):
 
 
 def _handle_set_seed(params, context):
-    seed = float(params.get("seed", 0.0))
+    seed = _safe_float(params.get("seed", 0.0), 0.0)
     mod = _get_active_mod(context)
     if not mod:
         return {"success": False, "results": ["未找到修改器。"]}
@@ -356,18 +356,47 @@ def _handle_toggle_buildings(params, context):
     return {"success": False, "results": [f"设置失败: {err}"]}
 
 
+# --- Safe numeric conversion (LLM may send strings like "medium") ---
+
+_WORD_TO_NUM = {
+    "small": 3, "tiny": 1, "小": 5, "smallish": 5,
+    "medium": 10, "中": 10, "mid": 10, "normal": 10,
+    "large": 30, "big": 40, "大": 50, "huge": 80,
+    "low": 0.2, "high": 0.8,
+    "narrow": 2, "wide": 15,
+}
+
+
+def _safe_float(val, default=10.0):
+    if isinstance(val, (int, float)):
+        return float(val)
+    if isinstance(val, str):
+        val_lower = val.strip().lower()
+        if val_lower in _WORD_TO_NUM:
+            return float(_WORD_TO_NUM[val_lower])
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return default
+    return default
+
+
+def _safe_int(val, default=10):
+    return int(_safe_float(val, default))
+
+
 # --- Member C: Ecological Scene handlers ---
 
 def _handle_generate_terrain(params, context):
     scene = context.scene
     if "hill_height" in params:
-        scene.cg_terrain_hill_height = float(params["hill_height"])
+        scene.cg_terrain_hill_height = _safe_float(params["hill_height"], 20)
     if "noise_scale" in params:
-        scene.cg_terrain_noise_scale = float(params["noise_scale"])
+        scene.cg_terrain_noise_scale = _safe_float(params["noise_scale"], 3.0)
     if "grid_size" in params:
-        scene.cg_terrain_grid_size = float(params["grid_size"])
+        scene.cg_terrain_grid_size = _safe_float(params["grid_size"], 50)
     if "subdivisions" in params:
-        scene.cg_terrain_subdivisions = int(params["subdivisions"])
+        scene.cg_terrain_subdivisions = _safe_int(params["subdivisions"], 30)
     bpy.ops.cg.eco_generate_terrain()
     return {"success": True, "results": [f"地形已生成（高度={scene.cg_terrain_hill_height}m）"]}
 
@@ -375,9 +404,9 @@ def _handle_generate_terrain(params, context):
 def _handle_generate_lake(params, context):
     scene = context.scene
     if "lake_size" in params:
-        scene.cg_lake_size = float(params["lake_size"])
+        scene.cg_lake_size = _safe_float(params["lake_size"], 20)
     if "ripple_strength" in params:
-        scene.cg_lake_ripple_strength = float(params["ripple_strength"])
+        scene.cg_lake_ripple_strength = _safe_float(params["ripple_strength"], 0.05)
     if "water_color" in params and isinstance(params["water_color"], list):
         scene.cg_lake_water_color = tuple(params["water_color"])
     bpy.ops.cg.eco_generate_lake()
@@ -387,9 +416,9 @@ def _handle_generate_lake(params, context):
 def _handle_generate_river(params, context):
     scene = context.scene
     if "river_width" in params:
-        scene.cg_river_width = float(params["river_width"])
+        scene.cg_river_width = _safe_float(params["river_width"], 5)
     if "seed" in params:
-        scene.cg_river_seed = int(params["seed"])
+        scene.cg_river_seed = _safe_int(params["seed"], 0)
     bpy.ops.cg.eco_generate_river()
     return {"success": True, "results": [f"河流已生成（宽度={scene.cg_river_width}m）"]}
 
@@ -397,27 +426,26 @@ def _handle_generate_river(params, context):
 def _handle_add_boat(params, context):
     scene = context.scene
     if "boat_scale" in params:
-        scene.cg_boat_scale = float(params["boat_scale"])
+        scene.cg_boat_scale = _safe_float(params["boat_scale"], 1.0)
     if "flow_speed" in params:
-        scene.cg_river_flow_speed = float(params["flow_speed"])
+        scene.cg_river_flow_speed = _safe_float(params["flow_speed"], 1.0)
     bpy.ops.cg.eco_add_boat()
     return {"success": True, "results": ["船只已添加到河流路径上"]}
-
 
 # --- Member D: Dynamic Simulation handlers ---
 
 def _handle_start_simulation(params, context):
     scene = context.scene
     if "car_density" in params:
-        scene.cg_car_density = int(params["car_density"])
+        scene.cg_car_density = _safe_int(params["car_density"], 10)
     if "car_speed_min" in params:
-        scene.cg_car_speed_min = int(params["car_speed_min"])
+        scene.cg_car_speed_min = _safe_int(params["car_speed_min"], 2)
     if "car_speed_max" in params:
-        scene.cg_car_speed_max = int(params["car_speed_max"])
+        scene.cg_car_speed_max = _safe_int(params["car_speed_max"], 8)
     if "pedestrian_density" in params:
-        scene.cg_pedestrian_density = int(params["pedestrian_density"])
+        scene.cg_pedestrian_density = _safe_int(params["pedestrian_density"], 5)
     if "traffic_light_green" in params:
-        scene.cg_traffic_light_green = int(params["traffic_light_green"])
+        scene.cg_traffic_light_green = _safe_int(params["traffic_light_green"], 120)
     try:
         bpy.ops.cg.add_dynamic_elements()
         return {"success": True, "results": ["仿真已启动（车辆+行人+红绿灯）"]}
@@ -434,13 +462,22 @@ def _handle_stop_simulation(params, context):
 
 def _handle_apply_layout(params, context):
     scene = context.scene
-    if "points" in params:
-        pts = params["points"]
-        if isinstance(pts, list):
+    pts = params.get("points")
+    if pts is not None:
+        if isinstance(pts, str):
+            scene.cg_layout_points_text = pts  # "x,y;x,y;..."
+        elif isinstance(pts, list):
             scene.cg_layout_points_text = ";".join(
                 f"{p[0]},{p[1]}" if isinstance(p, (list, tuple)) else str(p)
                 for p in pts
             )
+    conns = params.get("connections")
+    if conns is not None and isinstance(conns, str):
+        scene.cg_layout_connections_text = conns
+    faces = params.get("faces")
+    if faces is not None and isinstance(faces, str):
+        scene.cg_layout_faces_text = faces
+        scene.cg_layout_auto_faces = not bool(faces)
     bpy.ops.cg.apply_point_layout()
     return {"success": True, "results": ["道路布局已生成"]}
 
@@ -450,7 +487,7 @@ def _handle_sketch_layout(params, context):
     if "image_path" in params:
         scene.cg_sketch_image_path = str(params["image_path"])
     if "threshold" in params:
-        scene.cg_sketch_threshold = int(params["threshold"])
+        scene.cg_sketch_threshold = _safe_int(params["threshold"], 50)
     bpy.ops.cg.apply_sketch_layout()
     return {"success": True, "results": ["草图布局提取已完成"]}
 
@@ -480,7 +517,7 @@ def _handle_apply_scene_template(params, context):
 
 
 def _handle_apply_road_texture(params, context):
-    tid = int(params.get("texture_id", 0))
+    tid = _safe_int(params.get("texture_id", 0), 0)
     _ensure_cg_active(context)
     context.scene.road_texture_id = tid
     try:
@@ -491,7 +528,7 @@ def _handle_apply_road_texture(params, context):
 
 
 def _handle_apply_pavement_texture(params, context):
-    tid = int(params.get("texture_id", 0))
+    tid = _safe_int(params.get("texture_id", 0), 0)
     _ensure_cg_active(context)
     context.scene.pavement_texture_id = tid
     try:
@@ -511,17 +548,17 @@ def _handle_place_furniture(params, context):
             aid = "wooden_picnic_table"
         scene.added_3d_asset_id = aid
     if "min_count" in params:
-        scene.added_3d_asset_min_count = int(params["min_count"])
+        scene.added_3d_asset_min_count = _safe_int(params["min_count"], 5)
     if "max_count" in params:
-        scene.added_3d_asset_max_count = int(params["max_count"])
+        scene.added_3d_asset_max_count = _safe_int(params["max_count"], 10)
     if "spacing" in params:
-        scene.added_3d_asset_spacing = float(params["spacing"])
+        scene.added_3d_asset_spacing = _safe_float(params["spacing"], 5.0)
     if "scale" in params:
-        scene.added_3d_asset_scale = float(params["scale"])
+        scene.added_3d_asset_scale = _safe_float(params["scale"], 1.0)
     if "randomize" in params:
         scene.added_3d_asset_randomize = bool(params["randomize"])
     if "placement_offset" in params:
-        scene.added_3d_asset_placement_offset = float(params["placement_offset"])
+        scene.added_3d_asset_placement_offset = _safe_float(params["placement_offset"], 0.0)
     if "clear_previous" in params:
         scene.added_3d_asset_clear_previous = bool(params["clear_previous"])
     _ensure_cg_active(context)
@@ -551,11 +588,11 @@ def _handle_delete_furniture(params, context):
 def _handle_apply_layout_template(params, context):
     scene = context.scene
     if "layout_id" in params:
-        scene.layout_template_id = int(params["layout_id"])
+        scene.layout_template_id = _safe_int(params["layout_id"], 0)
     if "rows" in params:
-        scene.layout_template_rows = int(params["rows"])
+        scene.layout_template_rows = _safe_int(params["rows"], 2)
     if "columns" in params:
-        scene.layout_template_columns = int(params["columns"])
+        scene.layout_template_columns = _safe_int(params["columns"], 2)
     try:
         bpy.ops.cg.apply_layout_template()
         return {"success": True, "results": ["布局模板已应用"]}
@@ -823,13 +860,15 @@ FUNCTION_REGISTRY = {
     # --- Member D: Road Layout ---
     "apply_layout": {
         "name": "apply_layout",
-        "title": "应用坐标布局",
+        "title": "应用道路布局",
         "category": "layout",
-        "description": "根据手动坐标点集生成道路布局",
+        "description": "根据坐标点集(数组或分号分隔文本)生成道路布局",
         "risk": "medium",
-        "schemaSummary": "points",
+        "schemaSummary": "points, connections, faces",
         "parameters": {
-            "points": {"type": "array", "description": "坐标点列表 [[x,y],[x,y],...]", "required": False},
+            "points": {"type": "string", "description": "坐标点集，格式 'x,y;x,y;...'", "required": False},
+            "connections": {"type": "string", "description": "边连接，格式 'i,j;i,j;...'", "required": False},
+            "faces": {"type": "string", "description": "四边形面，格式 'a,b,c,d;...'", "required": False},
         },
         "handler": _handle_apply_layout,
     },

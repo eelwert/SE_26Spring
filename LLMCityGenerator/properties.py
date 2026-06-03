@@ -381,9 +381,6 @@ def _remove_layout_properties():
     del bpy.types.Scene.cg_sketch_threshold
     del bpy.types.Scene.cg_sketch_min_line_length
     del bpy.types.Scene.cg_layout_connections_text
-    del bpy.types.Scene.cg_sketch_image_path
-    del bpy.types.Scene.cg_sketch_threshold
-    del bpy.types.Scene.cg_sketch_min_line_length
     del bpy.types.Scene.cg_layout_faces_text
     del bpy.types.Scene.cg_layout_auto_faces
 

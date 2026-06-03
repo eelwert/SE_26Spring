@@ -40,7 +40,6 @@ export function MultimodalPage() {
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
-      // Strip "data:image/png;base64," prefix
       const base64 = result.includes(',') ? result.split(',')[1] : result;
       setImageBase64(base64);
     };
@@ -53,15 +52,32 @@ export function MultimodalPage() {
     [activeCommand, tasks],
   );
 
+  // Sketch ↔ screenshot are mutually exclusive (only one image modality at a time)
   const toggleModality = (value: Modality) => {
     setModalities((current) => {
       if (current.includes(value)) {
         const next = current.filter((item) => item !== value);
         return next.length ? next : ['text'];
       }
-      return [...current, value];
+      const imageMods: Modality[] = ['sketch', 'screenshot'];
+      const otherImage = imageMods.find((m) => m !== value);
+      const next = [
+        ...current.filter((m) => m !== otherImage!), // remove the other image modality
+        value,
+      ];
+      if (current.includes('text') && !next.includes('text')) {
+        next.push('text');
+      }
+      return next;
     });
+    // Clear previous image when switching modality
+    setImageBase64(null);
+    setImageFileName('');
   };
+
+  const isSketch = modalities.includes('sketch');
+  const isScreenshot = modalities.includes('screenshot');
+  const showFileUpload = isSketch || isScreenshot;
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -112,7 +128,7 @@ export function MultimodalPage() {
                 </button>
               ))}
             </div>
-            <Field label="多模态通道">
+            <Field label="多模态通道（草图 / 截图二选一）">
               <div className="segmented">
                 {modalityOptions.map((option) => {
                   const Icon = option.icon;
@@ -128,8 +144,8 @@ export function MultimodalPage() {
             <Field label="自然语言指令">
               <textarea rows={7} value={text} onChange={(event) => setText(event.target.value)} />
             </Field>
-            {modalities.includes('screenshot') || modalities.includes('sketch') ? (
-              <Field label="上传截图/草图">
+            {showFileUpload ? (
+              <Field label={isSketch ? '上传道路草图' : '上传城市场景截图'}>
                 <input type="file" accept="image/*" onChange={handleFileChange} />
                 {imageFileName ? <small style={{ color: '#4c1' }}>已选择: {imageFileName}</small> : null}
               </Field>

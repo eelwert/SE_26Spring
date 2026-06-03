@@ -128,38 +128,40 @@ class CG_OT_ApplyPointLayout(bpy.types.Operator):
 
 
 class CG_OT_ApplySketchLayout(bpy.types.Operator):
-    """Load a sketch image and extract road topology."""
+    """Analyse sketch via LLM and fill the Points/Connections/Faces fields for review."""
 
     bl_idname = "cg.apply_sketch_layout"
-    bl_label = "Generate Layout from Sketch"
-    bl_description = "Extract road topology from a sketch image"
+    bl_label = "Generate from Sketch"
+    bl_description = "LLM analyse sketch image and fill coordinate fields below"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
         scene = context.scene
         image_path = scene.cg_sketch_image_path
-        threshold = scene.cg_sketch_threshold
-        min_len = scene.cg_sketch_min_line_length
 
         if not image_path:
             self.report({"WARNING"}, "Select a sketch image file first")
             return {"CANCELLED"}
 
-        result = SketchProcessor.process(
-            image_path=image_path,
-            method="auto",
-            threshold=threshold,
-            min_line_length=min_len,
-            mesh_name="RoadLayout",
-        )
+        result = SketchProcessor.analyze_only(image_path)
 
-        if result["success"]:
-            obj = bpy.data.objects.get(result["data"]["mesh_name"])
-            if obj:
-                context.view_layer.objects.active = obj
-                obj.select_set(True)
-            self.report({"INFO"}, result["message"])
-            return {"FINISHED"}
-        else:
+        if not result["success"]:
             self.report({"WARNING"}, result["message"])
             return {"CANCELLED"}
+
+        pts_text = result.get("points_text", "")
+        conns_text = result.get("connections_text", "")
+        faces_text = result.get("faces_text", "")
+
+        if not pts_text:
+            self.report({"WARNING"}, "LLM未能识别出道路结构")
+            return {"CANCELLED"}
+
+        # Fill directly — AI already returns the final format
+        scene.cg_layout_points_text = pts_text
+        scene.cg_layout_connections_text = conns_text
+        scene.cg_layout_faces_text = faces_text
+        scene.cg_layout_auto_faces = not bool(faces_text)
+
+        self.report({"INFO"}, result.get("message", "识别成功，请检查后点 Preview / Apply"))
+        return {"FINISHED"}

@@ -16,9 +16,13 @@ import ssl
 DEFAULT_API_URL = "https://api.deepseek.com/v1/chat/completions"
 DEFAULT_MODEL = "deepseek-chat"
 
-# Zhipu GLM-4V multimodal visual model
+# Zhipu GLM-4V multimodal visual model (for screenshot analysis)
 ZHIPU_API_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
-ZHIPU_VISION_MODEL = "glm-4v-flash"
+ZHIPU_VISION_MODEL = "glm-4v"  # higher quality than glm-4v-flash
+
+# Qwen (DashScope) multimodal model — best for road topology extraction
+QWEN_API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+QWEN_VISION_MODEL = "qwen3.6-flash"
 
 FUNCTION_LIST = [
     {"name": "apply_template_linkage", "params": {"template_id": "int 0-9", "tree_density": "int", "road_width": "int"}},
@@ -83,24 +87,59 @@ SYSTEM_PROMPT = f"""你是智能城市生成系统的 AI 助手。将用户的�
 def parse_command(text: str, modalities: list[str], attachment_names: list[str], image_base64: str | None = None) -> dict:
     """Parse user instruction into a function plan.
 
-    When both text and screenshot are provided, BOTH are analyzed and merged.
-    If the same function appears in both, the TEXT version takes priority.
+    - sketch → analyze road sketch → return apply_layout params
+    - screenshot → analyze city scene → return function calls
+    - text → LLM/keyword parse → return function calls
     """
+    has_sketch = "sketch" in modalities and image_base64
     has_screenshot = "screenshot" in modalities and image_base64
     has_text = text.strip() and len(text.strip()) >= 2
 
+    # ── Sketch: analyze road topology → apply_layout ──
+    if has_sketch:
+        sketch_result = analyze_sketch(image_base64)
+        pts = sketch_result.get("points_text", "")
+        conns = sketch_result.get("connections_text", "")
+        faces = sketch_result.get("faces_text", "")
+        if pts:
+            return {
+                "plan": [{
+                    "id": "node-1",
+                    "funcName": "apply_layout",
+                    "title": "应用草图道路布局",
+                    "params": {
+                        "points": pts,
+                        "connections": conns,
+                        "faces": faces,
+                    },
+                    "dependsOn": [],
+                    "status": "approved",
+                }],
+                "explanation": f"草图识别完成: {sketch_result.get('message', '')}",
+                "intentTag": "sketch_layout",
+                "confidence": 0.85,
+                "slots": {"points_count": pts.count(";") + 1},
+                "needsClarification": False,
+            }
+        return {
+            "plan": [],
+            "explanation": sketch_result.get("message", "草图识别失败"),
+            "intentTag": "sketch_layout",
+            "confidence": 0,
+            "slots": {},
+            "needsClarification": True,
+        }
+
+    # ── Screenshot / Text paths ──
     text_result = None
     screenshot_result = None
 
-    # Analyse screenshot if present
     if has_screenshot:
         zhipu_key = os.environ.get("ZHIPU_API_KEY", "")
         if zhipu_key:
-            # If text is also provided, screenshot gets its own independent instruction
             instruction = text if not has_text else "请独立分析这张城市场景截图。你的任务是让Blender城市贴近截图：截图里有什么就设置什么，截图里没有的不要额外添加。观察道路宽度、车道数、建筑高度、树木密度、天气时间、路灯、3D家具（野餐椅/小消防罐/小黄鸭）、地形湖泊河流、车辆行人，估算参数值并生成函数调用。"
             screenshot_result = _analyze_screenshot(image_base64, instruction, zhipu_key)
 
-    # Analyse text if present
     if has_text:
         api_key = os.environ.get("DEEPSEEK_API_KEY", "")
         if api_key:
@@ -108,7 +147,6 @@ def parse_command(text: str, modalities: list[str], attachment_names: list[str],
         if not text_result:
             text_result = _parse_local(text, modalities, attachment_names)
 
-    # Merge results
     if text_result and screenshot_result:
         return _merge_plans(text_result, screenshot_result)
     elif screenshot_result:
@@ -116,7 +154,6 @@ def parse_command(text: str, modalities: list[str], attachment_names: list[str],
     elif text_result:
         return text_result
 
-    # Ultimate fallback
     return _parse_local(text, modalities, attachment_names) if has_text else {
         "plan": [],
         "explanation": "未能分析指令，请提供文本或截图。",
@@ -322,6 +359,85 @@ def _extract_json(raw: str) -> dict:
     if start != -1 and end != -1:
         raw = raw[start:end+1]
     return json.loads(raw)
+
+
+SKETCH_ANALYSIS_PROMPT = """分析手绘道路草图，输出分号分隔的文本参数。
+
+## 输出格式（纯 JSON）
+{"points":"x,y;x,y;...","connections":"i,j;i,j;...","faces":"a,b,c,d;a,b,c,d;..."}
+
+## 图形识别
+
+已闭合（原样提取）：
+- 三角形 → 3点 1三角面。{"points":"100,160;0,0;200,0","connections":"0,1;1,2;2,0","faces":"0,1,2"}
+- 日字形（2竖格）→ 6点 2面。{"points":"0,0;80,0;0,80;80,80;0,160;80,160","connections":"0,1;0,2;1,3;2,3;2,4;3,5;4,5","faces":"0,1,3,2;2,3,5,4"}
+- 日字形（2横格）→ 6点 2面。{"points":"0,0;80,0;160,0;0,80;80,80;160,80","connections":"0,1;1,2;0,3;1,4;2,5;3,4;4,5","faces":"0,1,4,3;1,2,5,4"}
+- 目字形（3竖格）→ 8点 3面。{"points":"0,0;80,0;0,50;80,50;0,100;80,100;0,150;80,150","connections":"0,1;0,2;1,3;2,3;2,4;3,5;4,5;4,6;5,7;6,7","faces":"0,1,3,2;2,3,5,4;4,5,7,6"}
+- 田字形（4方格）→ 9点 4面。{"points":"0,0;80,0;160,0;0,80;80,80;160,80;0,160;80,160;160,160","connections":"0,1;1,2;0,3;1,4;2,5;3,4;4,5;3,6;4,7;5,8;6,7;7,8","faces":"0,1,4,3;1,2,5,4;3,4,7,6;4,5,8,7"}
+- 一字型/单线 → 直接输出点集{"points":"0,0;80,0;160,0;0,80;80,80;160,80","connections":"0,1;1,2;0,3;1,4;2,5;3,4;4,5","faces":"0,1,4,3;1,2,5,4"}
+- 十字/T形/L形 → 直接输出点集{"points":"0,0;80,0;160,0;0,80;80,80;160,80;0,160;80,160;160,160","connections":"0,1;1,2;0,3;1,4;2,5;3,4;4,5;3,6;4,7;5,8;6,7;7,8","faces":"0,1,4,3;1,2,5,4;3,4,7,6;4,5,8,7"}
+
+
+"""
+
+
+
+
+
+def analyze_sketch(image_base64: str, api_key: str | None = None) -> dict:
+    """Analyze a hand-drawn road sketch via Qwen VL and return Points/Connections/Faces text.
+
+    Returns:
+        {"points_text": str, "connections_text": str, "faces_text": str, "message": str}
+    """
+    import os
+    api_key = api_key or os.environ.get("QWEN_API_KEY", "")
+    if not api_key:
+        return {"points_text": "", "connections_text": "", "faces_text": "", "message": "未设置 QWEN_API_KEY"}
+
+    payload = json.dumps({
+        "model": QWEN_VISION_MODEL,
+        "messages": [
+            {"role": "system", "content": SKETCH_ANALYSIS_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}},
+                    {"type": "text", "text": "请分析这张道路草图"},
+                ],
+            },
+        ],
+        "max_tokens": 4096,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        QWEN_API_URL,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+        method="POST",
+    )
+    ctx = ssl._create_unverified_context()
+    try:
+        with urllib.request.urlopen(req, timeout=90, context=ctx) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+        content = body["choices"][0]["message"]["content"]
+        result = _extract_json(content)
+        pts = result.get("points", "")
+        conns = result.get("connections", "")
+        faces = result.get("faces", "")
+        if not pts:
+            return {"points_text": "", "connections_text": "", "faces_text": "", "message": "模型未能识别出道路结构"}
+        return {
+            "points_text": pts,
+            "connections_text": conns,
+            "faces_text": faces,
+            "message": "识别成功",
+        }
+    except Exception as e:
+        return {"points_text": "", "connections_text": "", "faces_text": "", "message": f"草图分析失败: {str(e)}"}
 
 
 def _parse_local(text: str, modalities: list[str], attachment_names: list[str]) -> dict:

@@ -408,6 +408,20 @@ def get_pending_tasks():
     return _ok({"tasks": [t.model_dump() for t in pending]})
 
 
+@router.post("/sketch/analyze")
+def analyze_sketch(body: dict):
+    """Analyze a hand-drawn road sketch image and return road topology.
+
+    Body: {"image_base64": "<base64-encoded image>"}
+    Returns: {"points": [[x,y],...], "edges": [[i,j],...], "message": str}
+    """
+    image_base64 = body.get("image_base64", "")
+    if not image_base64:
+        raise HTTPException(400, "缺少 image_base64 字段")
+    result = llm_svc.analyze_sketch(image_base64)
+    return _ok(result)
+
+
 @router.post("/tasks/{task_id}/result")
 def task_result(task_id: str, body: dict):
     task = store._require(store.tasks, task_id, "任务")

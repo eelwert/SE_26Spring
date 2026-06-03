@@ -21,6 +21,46 @@ class SketchProcessor:
     """Extract road topology from a sketch image."""
 
     @staticmethod
+    def analyze_only(image_path):
+        """LLM analyse — returns Points/Connections/Faces as text strings.
+
+        Returns:
+            {"success": bool, "points_text": str, "connections_text": str,
+             "faces_text": str, "message": str}
+        """
+        import os
+        if not os.path.isfile(image_path):
+            return {"success": False, "message": f"File not found: {image_path}"}
+
+        with open(image_path, "rb") as fh:
+            b64_data = base64.b64encode(fh.read()).decode()
+
+        result = SketchProcessor._raw_socket_post(
+            SketchProcessor.BACKEND_SKETCH_URL,
+            {"image_base64": b64_data},
+        )
+
+        if result is None:
+            return {"success": False, "message": "无法连接后端 (localhost:8000)，请确保后端已启动"}
+
+        data = result.get("data", result)
+        pts = data.get("points_text", "")
+        conns = data.get("connections_text", "")
+        faces = data.get("faces_text", "")
+        message = data.get("message", "")
+
+        if not pts:
+            return {"success": False, "message": message or "LLM未能从草图中识别出道路结构"}
+
+        return {
+            "success": True,
+            "points_text": pts,
+            "connections_text": conns,
+            "faces_text": faces,
+            "message": message,
+        }
+
+    @staticmethod
     def process(image_path, method="auto", threshold=0.5, min_line_length=30,
                 mesh_name="RoadLayout"):
         """Run the extraction pipeline and create a road mesh.
@@ -95,38 +135,92 @@ class SketchProcessor:
             raw_points, mesh_name, method="cv2")
 
     # ------------------------------------------------------------------
-    # LLM back-end (stub — member B provides the actual API call)
+    # LLM back-end — calls backend server, which uses GLM-4V multimodal model
     # ------------------------------------------------------------------
+
+    BACKEND_SKETCH_URL = "http://localhost:8000/api/sketch/analyze"
+
+    @staticmethod
+    def _raw_socket_post(url, json_data):
+        """Send JSON via raw socket HTTP POST (bypasses Blender firewall)."""
+        import socket
+        try:
+            rest = url.split("://", 1)[1]
+            host, rest = rest.split(":", 1)
+            port_s, path = rest.split("/", 1)
+            port = int(port_s)
+            path = "/" + path
+        except Exception:
+            return None
+
+        body_bytes = json.dumps(json_data).encode("utf-8")
+        req = (
+            f"POST {path} HTTP/1.0\r\n"
+            f"Host: {host}\r\nConnection: close\r\n"
+            f"Content-Type: application/json\r\n"
+            f"Content-Length: {len(body_bytes)}\r\n\r\n"
+        ).encode("utf-8") + body_bytes
+
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(60)
+            sock.connect((host, port))
+            sock.sendall(req)
+            resp = b""
+            while True:
+                try:
+                    chunk = sock.recv(4096)
+                    if not chunk:
+                        break
+                    resp += chunk
+                except socket.timeout:
+                    break
+            sock.close()
+            body_start = resp.find(b"\r\n\r\n")
+            if body_start == -1:
+                return None
+            return json.loads(resp[body_start + 4:].decode("utf-8"))
+        except Exception as e:
+            print(f"[SketchProcessor] Socket error: {e}")
+            return None
 
     @staticmethod
     def _process_llm(image_path, mesh_name):
-        """Placeholder for multimodal LLM line extraction.
+        """Send sketch image to backend multimodal LLM for road topology extraction.
 
-        In the final integration, Member B's ``llm_service.py`` would be
-        called here.  For now we return an informative error so the
-        developer knows where to wire in the API call.
+        The backend calls GLM-4V-Flash to analyse the hand-drawn sketch and
+        returns points (0-1000 normalized coords) and edges (index pairs).
         """
-        # Encode image for reference
         with open(image_path, "rb") as fh:
             b64_data = base64.b64encode(fh.read()).decode()
 
-        # TODO: replace with actual LLM call (member B)
-        # prompt = (
-        #     "Analyse this hand-drawn road sketch. Return ONLY valid JSON: "
-        #     '{"points": [[x1,y1], ...], "lines": [[i,j], ...]}'
-        # )
-        # response = llm_service.chat(prompt, image_b64=b64_data)
-        # data = json.loads(response)
+        result = SketchProcessor._raw_socket_post(
+            SketchProcessor.BACKEND_SKETCH_URL,
+            {"image_base64": b64_data},
+        )
 
-        return {
-            "success": False,
-            "message": (
-                "LLM sketch processing requires member B's llm_service module. "
-                "Install cv2 (pip install opencv-python) into Blender's Python, "
-                "or wire the LLM call in layout/sketch_processor.py:_process_llm(). "
-                f"Image encoded as base64 ({len(b64_data)} bytes ready)."
-            ),
-        }
+        if result is None:
+            return {"success": False, "message": "无法连接到后端服务器 (localhost:8000)，请确保后端已启动"}
+
+        data = result.get("data", result)
+        message = data.get("message", "")
+        points = data.get("points", [])
+        edges = data.get("edges", [])
+
+        if not points or not edges:
+            return {"success": False, "message": message or "模型未能从草图中识别出道路结构"}
+
+        # Convert normalized 0-1000 coords to Blender world coords (scale to ~200m)
+        scale = 0.2  # 1000 → 200 Blender units
+        bl_points = [(p[0] * scale, p[1] * scale) for p in points]
+        segments = [(bl_points[i], bl_points[j]) for i, j in edges if i < len(bl_points) and j < len(bl_points)]
+
+        if not segments:
+            return {"success": False, "message": "无法将识别结果转换为道路线段"}
+
+        return SketchProcessor._build_mesh_from_segments(
+            segments, mesh_name, method=f"llm ({message})"
+        )
 
     # ------------------------------------------------------------------
     # Shared helpers
