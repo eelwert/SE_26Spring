@@ -17,7 +17,8 @@ tests/
 │   ├── App.test.tsx                 # React 登录、角色、权限路由测试
 │   └── ui.test.tsx                  # 共享 UI 组件测试
 ├── e2e/
-│   └── app.spec.ts                  # Playwright 浏览器 E2E 测试
+│   ├── app.spec.ts                  # Playwright mock E2E 测试
+│   └── overall.spec.ts              # 真实前端 + 真实后端 + 假 Blender 的整体测试
 └── setup.ts                         # Vitest/jest-dom 初始化
 ```
 
@@ -50,7 +51,7 @@ python -m pytest tests/backend/test_api_contract.py
 - 设置更新、锁定设置保护、插件函数启停。
 - `/sketch/analyze` 的错误路径和无 key fallback。
 
-目前后端 REST API 基本全覆盖；两个 WebSocket `/ws/frontend`、`/ws/blender` 尚未自动化覆盖。
+目前后端 REST API 基本全覆盖；`/ws/frontend` 已通过整体 E2E 间接覆盖，`/ws/blender` 尚未单独自动化覆盖。
 
 ## LLM 测试
 
@@ -162,6 +163,12 @@ npm run test
 npm run test:e2e
 ```
 
+只运行整体测试：
+
+```powershell
+npx playwright test tests/e2e/overall.spec.ts --project=chromium
+```
+
 Playwright 会自动启动 Vite dev server：
 
 ```text
@@ -176,7 +183,17 @@ http://127.0.0.1:5173
 - admin 登录进入 `/admin`。
 - modeler 访问管理员设置页会被权限守卫重定向。
 
-当前 E2E 使用 Playwright route mock 拦截 `http://localhost:8000/api/**`，因此不依赖真实后端、LLM 或 Blender。后续可增加“前端 + 真实后端”的 E2E。
+`tests/e2e/app.spec.ts` 使用 Playwright route mock 拦截 `**/api/**`，因此不依赖真实后端、LLM 或 Blender，主要验证登录、角色门户和权限路由。
+
+`tests/e2e/overall.spec.ts` 是当前项目的整体测试：
+
+- 启动真实 FastAPI 后端和真实前端。
+- 清空 `DEEPSEEK_API_KEY`、`QWEN_API_KEY`、`ZHIPU_API_KEY`，强制后端走本地 fallback LLM。
+- 从前端多模态页面提交真实文本指令，由后端生成函数计划并自动下发任务。
+- 测试代码通过 `/api/blender/register`、`/api/tasks/pending`、`/api/tasks/{id}/result` 模拟 Blender 拉取任务和回执。
+- 前端通过 `/ws/frontend` 接收实时任务状态更新，并在页面上显示成功结果。
+
+这条整体测试不依赖真实 LLM 或真实 Blender，但已经覆盖真实前端、真实后端、任务队列、假 Blender 回执和前端 WebSocket 刷新。
 
 ## 构建与 lint
 
@@ -201,6 +218,7 @@ npm run lint
 ```powershell
 python -m pytest
 npm run test:run
+npx playwright test tests/e2e/overall.spec.ts --project=chromium
 ```
 
 提交前完整验证：
@@ -224,9 +242,9 @@ python -m pytest
 
 ## 当前尚未覆盖的测试
 
-- WebSocket `/ws/frontend` 和 `/ws/blender`。
+- WebSocket `/ws/blender`。
 - 真实 Blender 中逐个执行 `function_registry` 的 28 个插件函数。
-- 前端连接真实 FastAPI 后端的浏览器 E2E。
+- 前端连接真实 Blender 插件的浏览器 E2E。
 - 后端 + 真实 Blender 插件轮询 + 场景执行的完整集成测试。
 
 这些属于下一阶段集成测试，依赖 Blender 安装、插件启用和可用场景文件。

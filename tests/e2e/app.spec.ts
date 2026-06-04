@@ -168,7 +168,7 @@ const makeUser = (role: RoleCode) => ({
 });
 
 async function mockBackendApi(page: Page) {
-  await page.route('http://localhost:8000/api/**', async (route) => {
+  await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
 
     if (url.pathname === '/api/auth/login') {
