@@ -1,0 +1,7 @@
+[tool.pytest.ini_options]
+testpaths = ["tests/backend"]
+pythonpath = ["."]
+addopts = "-ra"
+markers = [
+  "ai_integration: tests that call real external AI providers and require API keys",
+]
