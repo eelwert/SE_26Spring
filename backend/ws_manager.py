@@ -13,11 +13,13 @@ class WSManager:
     def __init__(self):
         self.frontend: Optional[WebSocket] = None
         self.blender: Optional[WebSocket] = None
+        self.frontend_loop: Optional[asyncio.AbstractEventLoop] = None
         self._pending: dict[str, asyncio.Future] = {}
 
     async def connect_frontend(self, ws: WebSocket):
         await ws.accept()
         self.frontend = ws
+        self.frontend_loop = asyncio.get_running_loop()
         await self._send(ws, {"type": "connected", "role": "frontend"})
         try:
             while True:
@@ -30,6 +32,7 @@ class WSManager:
             pass
         finally:
             self.frontend = None
+            self.frontend_loop = None
 
     async def connect_blender(self, ws: WebSocket):
         await ws.accept()
@@ -64,8 +67,9 @@ class WSManager:
 
     def notify_frontend(self, event: dict):
         """Non-async helper to queue a send to frontend."""
-        if self.frontend:
-            asyncio.create_task(self._send(self.frontend, event))
+        if not self.frontend or not self.frontend_loop:
+            return
+        asyncio.run_coroutine_threadsafe(self._send(self.frontend, event), self.frontend_loop)
 
     async def _send(self, ws: WebSocket, data: dict):
         try:

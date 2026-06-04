@@ -16,10 +16,12 @@ class WSClient {
   private ws: WebSocket | null = null;
   private callbacks: WSCallback[] = [];
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private shouldReconnect = false;
 
   connect() {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
+    this.shouldReconnect = true;
     this.ws = new WebSocket(FRONTEND_WS_URL);
 
     this.ws.onopen = () => {
@@ -42,6 +44,7 @@ class WSClient {
     };
 
     this.ws.onclose = () => {
+      if (!this.shouldReconnect) return;
       console.log('[WS] Disconnected, reconnecting in 3s...');
       this.reconnectTimer = setTimeout(() => this.connect(), 3000);
     };
@@ -59,8 +62,10 @@ class WSClient {
   }
 
   disconnect() {
+    this.shouldReconnect = false;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
     this.ws?.close();
     this.ws = null;

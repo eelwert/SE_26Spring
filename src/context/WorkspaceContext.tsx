@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from '../services/api';
-import { backendFetchUrl } from '../services/api/config';
+import { wsClient } from '../services/ws';
 import type {
   Asset,
   AuditLog,
@@ -131,20 +131,34 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     void refreshWorkspace();
   }, [refreshWorkspace]);
 
-  // Poll backend every 3s for task updates (simpler than WebSocket)
   useEffect(() => {
-    const poll = async () => {
-      try {
-        const res = await fetch(backendFetchUrl('/workspace/bundle'), { cache: 'no-store' });
-        const envelope = await res.json() as { data: WorkspaceBundle };
-        if (envelope?.data?.tasks) {
-          setBundle((prev) => ({ ...prev, tasks: envelope.data.tasks }));
-        }
-      } catch { /* backend not reachable yet */ }
+    if (!isAuthenticated) {
+      wsClient.disconnect();
+      return undefined;
+    }
+
+    wsClient.connect();
+    const unsubscribe = wsClient.onUpdate((update) => {
+      setBundle((prev) => ({
+        ...prev,
+        tasks: prev.tasks.map((task) =>
+          task.id === update.taskId
+            ? {
+                ...task,
+                status: update.status as Task['status'],
+                progress: update.progress,
+                logs: update.results.length ? [...task.logs, ...update.results] : task.logs,
+              }
+            : task,
+        ),
+      }));
+    });
+
+    return () => {
+      unsubscribe();
+      wsClient.disconnect();
     };
-    const timer = setInterval(poll, 3000);
-    return () => clearInterval(timer);
-  }, []);
+  }, [isAuthenticated]);
 
   const selectedProject = useMemo(
     () => bundle.projects.find((project) => project.id === selectedProjectId),

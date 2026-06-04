@@ -1,14 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Brush, ExternalLink, FileImage, Map, PackagePlus, SlidersHorizontal, SquarePen } from 'lucide-react';
+import { Brush, FileImage, Map, PackagePlus, SlidersHorizontal, SquarePen } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Button, EmptyState, Field, MetricCard, Panel, SectionHeader, StatusBadge } from '../components/ui';
-
-const templateNumberMap: Record<string, string> = {
-  'tpl-waterfront': '0',
-  'tpl-commercial': '1',
-  'tpl-transit': '2',
-  'tpl-campus': '0',
-};
 
 const roadTextureOptions = [
   { id: 'road_4_clean', label: 'Road 4 clean', note: '干净沥青贴图，适合主干路' },
@@ -36,7 +29,6 @@ export function ModelerPortalPage() {
     submitCommand,
   } = useWorkspace();
   const [templateId, setTemplateId] = useState(selectedScene?.templateId ?? 'tpl-waterfront');
-  const [templateNumber, setTemplateNumber] = useState(templateNumberMap[selectedScene?.templateId ?? 'tpl-waterfront'] ?? '0');
   const [roadTexture, setRoadTexture] = useState(roadTextureOptions[0].id);
   const [assetId, setAssetId] = useState(furnitureAssets[0].id);
   const [assetCount, setAssetCount] = useState(furnitureAssets[0].count);
@@ -45,7 +37,6 @@ export function ModelerPortalPage() {
   const [sketchName, setSketchName] = useState('road-sketch.png');
   const [sketchBase64, setSketchBase64] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [pluginNotice, setPluginNotice] = useState<string | null>(null);
 
   const sceneTasks = useMemo(
     () => tasks.filter((task) => !selectedSceneId || task.sceneId === selectedSceneId).slice(0, 5),
@@ -123,27 +114,7 @@ export function ModelerPortalPage() {
           <h1>场景建模师门户</h1>
           <p>{selectedProject && selectedScene ? `${selectedProject.name} / ${selectedScene.name}` : '选择项目后配置 Blender 城市场景。'}</p>
         </div>
-        <div className="hero-actions">
-          <Button
-            onClick={() => {
-              setPluginNotice('已模拟从主系统跳转至 Blender 插件系统。演示时可同步打开插件面板或播放演示视频。');
-              window.alert('进入 Blender 插件系统：请在 Blender 侧边栏打开 LLM City Generator 面板。');
-            }}
-          >
-            <ExternalLink size={16} />
-            进入 Blender 插件系统
-          </Button>
-        </div>
       </section>
-
-      {pluginNotice ? (
-        <Panel>
-          <div className="notice-row">
-            <ExternalLink size={18} />
-            <span>{pluginNotice}</span>
-          </div>
-        </Panel>
-      ) : null}
 
       <div className="metrics-grid">
         <MetricCard label="当前对象" value={selectedScene?.objectCount.toLocaleString() ?? 0} meta="Blender 场景对象" />
@@ -155,27 +126,16 @@ export function ModelerPortalPage() {
 
       <div className="two-column">
         <Panel>
-          <SectionHeader title="模板编号联动" description="输入模板编号后批量配置树木、道路纹理与路边座椅类型。" />
-          <div className="form-grid">
-            <Field label="模板">
-              <select
-                value={templateId}
-                onChange={(event) => {
-                  setTemplateId(event.target.value);
-                  setTemplateNumber(templateNumberMap[event.target.value] ?? '0');
-                }}
-              >
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="模板编号">
-              <input value={templateNumber} onChange={(event) => setTemplateNumber(event.target.value)} />
-            </Field>
-          </div>
+          <SectionHeader title="模板联动" description="选择后端场景模板，联动配置树木、道路与座椅类型。" />
+          <Field label="模板">
+            <select value={templateId} onChange={(event) => setTemplateId(event.target.value)}>
+              {templates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+          </Field>
           {selectedTemplate ? (
             <div className="template-hints">
               <div>

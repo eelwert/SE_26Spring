@@ -1,15 +1,8 @@
 import { useMemo, useState } from 'react';
-import { ClipboardCheck, Lock, PlugZap, Search, ShieldCheck, ToggleLeft, ToggleRight, Trash2, UserMinus } from 'lucide-react';
+import { Lock, PlugZap, Search, ShieldCheck, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useSession } from '../context/SessionContext';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Button, EmptyState, MetricCard, Panel, SectionHeader, StatusBadge } from '../components/ui';
-import { roleLabels, type RoleCode } from '../types/domain';
-
-const managedUsers: Array<{ id: string; name: string; role: RoleCode; email: string; state: 'active' | 'review' | 'archived' }> = [
-  { id: 'usr-modeler', name: '林知远', role: 'modeler', email: 'modeler@nku.city', state: 'active' },
-  { id: 'usr-analyst', name: '沈迭青', role: 'analyst', email: 'analyst@nku.city', state: 'review' },
-  { id: 'usr-admin', name: '陈明策', role: 'admin', email: 'admin@nku.city', state: 'active' },
-];
 
 export function AdminPortalPage() {
   const { hasPermission } = useSession();
@@ -24,8 +17,6 @@ export function AdminPortalPage() {
   } = useWorkspace();
   const [query, setQuery] = useState('');
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [reviewedPlugins, setReviewedPlugins] = useState<Record<string, boolean>>({});
-  const [deletedUsers, setDeletedUsers] = useState<Record<string, boolean>>({});
 
   const filteredLogs = useMemo(
     () => auditLogs.filter((log) => `${log.actor} ${log.eventType} ${log.target}`.toLowerCase().includes(query.toLowerCase())).slice(0, 8),
@@ -48,7 +39,7 @@ export function AdminPortalPage() {
         <div>
           <span className="eyebrow">/admin</span>
           <h1>系统管理员门户</h1>
-          <p>管理用户、审核插件、维护白名单与审计证据链。</p>
+          <p>维护运行参数、插件函数白名单与审计证据链。</p>
         </div>
         <div className="admin-lockup">
           <ShieldCheck size={34} />
@@ -64,67 +55,36 @@ export function AdminPortalPage() {
         <MetricCard label="健康服务" value={health.filter((item) => item.status === 'healthy').length} meta="在线节点" tone="good" />
       </div>
 
-      <div className="two-column">
-        <Panel>
-          <SectionHeader title="用户与角色" description="管理员专属操作：删除用户、冻结账号和检查角色权限。" />
-          <div className="user-admin-list">
-            {managedUsers.map((user) => (
-              <div key={user.id} className={`user-admin-row ${deletedUsers[user.id] ? 'archived' : ''}`}>
-                <div>
-                  <strong>{user.name}</strong>
-                  <span>{user.email} / {roleLabels[user.role]}</span>
-                </div>
-                <StatusBadge status={deletedUsers[user.id] ? 'archived' : user.state} />
+      <Panel>
+        <SectionHeader title="运行参数" description="只允许管理员修改后端已开放的运行参数。" />
+        <div className="settings-list">
+          {settings.slice(0, 4).map((setting) => (
+            <div key={setting.id} className="compact-setting-row">
+              <div>
+                <strong>{setting.title}</strong>
+                <span>{setting.description}</span>
+              </div>
+              {typeof setting.value === 'boolean' ? (
                 <Button
                   size="sm"
-                  variant="danger"
-                  disabled={!hasPermission('settings:write') || user.role === 'admin' || deletedUsers[user.id]}
-                  onClick={() =>
-                    void runAction(user.id, () => {
-                      setDeletedUsers((current) => ({ ...current, [user.id]: true }));
-                    })
-                  }
-                  isLoading={busyKey === user.id}
+                  variant={setting.value ? 'secondary' : 'primary'}
+                  disabled={setting.locked}
+                  onClick={() => void runAction(setting.id, async () => updateSetting(setting.id, !setting.value))}
+                  isLoading={busyKey === setting.id}
                 >
-                  <UserMinus size={14} />
-                  删除用户
+                  {setting.value ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                  {setting.value ? '开启' : '关闭'}
                 </Button>
-              </div>
-            ))}
-          </div>
-        </Panel>
-
-        <Panel>
-          <SectionHeader title="运行参数" description="只允许管理员修改 RBAC、LLM、插件、仿真和审计策略。" />
-          <div className="settings-list">
-            {settings.slice(0, 4).map((setting) => (
-              <div key={setting.id} className="compact-setting-row">
-                <div>
-                  <strong>{setting.title}</strong>
-                  <span>{setting.description}</span>
-                </div>
-                {typeof setting.value === 'boolean' ? (
-                  <Button
-                    size="sm"
-                    variant={setting.value ? 'secondary' : 'primary'}
-                    disabled={setting.locked}
-                    onClick={() => void runAction(setting.id, async () => updateSetting(setting.id, !setting.value))}
-                    isLoading={busyKey === setting.id}
-                  >
-                    {setting.value ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
-                    {setting.value ? '开启' : '关闭'}
-                  </Button>
-                ) : (
-                  <StatusBadge status={setting.locked ? 'offline' : 'healthy'} />
-                )}
-              </div>
-            ))}
-          </div>
-        </Panel>
-      </div>
+              ) : (
+                <StatusBadge status={setting.locked ? 'offline' : 'healthy'} />
+              )}
+            </div>
+          ))}
+        </div>
+      </Panel>
 
       <Panel>
-        <SectionHeader title="审核插件" description="管理员审核插件函数后，才能启用或停用白名单中的高风险能力。" />
+        <SectionHeader title="插件函数白名单" description="启用或停用后端函数白名单中的能力。" />
         <div className="plugin-grid">
           {functions.map((func) => (
             <div key={func.name} className="plugin-card">
@@ -134,7 +94,7 @@ export function AdminPortalPage() {
                   <strong>{func.title}</strong>
                   <span>{func.name}</span>
                 </div>
-                <StatusBadge status={reviewedPlugins[func.name] ? 'success' : func.risk === 'high' ? 'warning' : 'info'} />
+                <StatusBadge status={func.enabled ? 'healthy' : 'offline'} />
               </div>
               <p>{func.description}</p>
               <div className="plugin-meta">
@@ -143,19 +103,6 @@ export function AdminPortalPage() {
                 <span>{func.averageMs}ms</span>
               </div>
               <div className="row-actions">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() =>
-                    void runAction(`review-${func.name}`, () => {
-                      setReviewedPlugins((current) => ({ ...current, [func.name]: true }));
-                    })
-                  }
-                  isLoading={busyKey === `review-${func.name}`}
-                >
-                  <ClipboardCheck size={14} />
-                  审核插件
-                </Button>
                 <Button
                   size="sm"
                   variant={func.enabled ? 'danger' : 'primary'}
@@ -194,10 +141,6 @@ export function AdminPortalPage() {
                 <StatusBadge status={log.severity} />
                 <StatusBadge status={log.result} />
                 <code>{log.evidenceHash}</code>
-                <Button size="sm" variant="secondary">
-                  <Trash2 size={14} />
-                  归档
-                </Button>
               </div>
             ))}
           </div>
