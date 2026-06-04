@@ -1,5 +1,5 @@
 import { FormEvent, useMemo, useState } from 'react';
-import { Download, Pause, Play, RotateCcw, TimerReset } from 'lucide-react';
+import { Pause, Play, TimerReset } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { SimulationJob } from '../types/domain';
 import { Button, EmptyState, Field, Panel, ProgressBar, SectionHeader, StatusBadge } from '../components/ui';
@@ -143,16 +143,6 @@ export function SimulationPage() {
                 </div>
                 <StatusBadge status={simulation.status} />
                 <ProgressBar value={simulation.progress} />
-                <div className="row-actions">
-                  <Button size="sm" variant="secondary">
-                    <Download size={14} />
-                    导出
-                  </Button>
-                  <Button size="sm" variant="ghost">
-                    <RotateCcw size={14} />
-                    复跑
-                  </Button>
-                </div>
               </div>
             ))}
           </div>

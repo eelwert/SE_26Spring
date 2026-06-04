@@ -1,5 +1,7 @@
 /** WebSocket client for receiving real-time task updates from the backend. */
 
+import { FRONTEND_WS_URL } from './api/config';
+
 type TaskUpdate = {
   type: 'task_update';
   taskId: string;
@@ -18,8 +20,7 @@ class WSClient {
   connect() {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
-    const url = `ws://localhost:8000/ws/frontend`;
-    this.ws = new WebSocket(url);
+    this.ws = new WebSocket(FRONTEND_WS_URL);
 
     this.ws.onopen = () => {
       console.log('[WS] Connected to backend');

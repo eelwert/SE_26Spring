@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from '../services/api';
+import { backendFetchUrl } from '../services/api/config';
 import type {
   Asset,
   AuditLog,
@@ -54,7 +55,6 @@ interface WorkspaceContextValue {
   updateSceneTemplate: (request: UpdateSceneTemplateRequest) => Promise<void>;
   replaceAsset: (request: ReplaceAssetRequest) => Promise<Task>;
   solveLayout: (request: LayoutRequest) => Promise<Task>;
-  extractSketch: (sceneId: string, fileName: string) => Promise<Task>;
   dispatchTask: (request: DispatchTaskRequest) => Promise<Task>;
   retryTask: (taskId: string) => Promise<void>;
   submitCommand: (request: SubmitCommandRequest) => Promise<MultimodalCommand>;
@@ -135,7 +135,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const poll = async () => {
       try {
-        const res = await fetch('http://localhost:8000/api/workspace/bundle', { cache: 'no-store' });
+        const res = await fetch(backendFetchUrl('/workspace/bundle'), { cache: 'no-store' });
         const envelope = await res.json() as { data: WorkspaceBundle };
         if (envelope?.data?.tasks) {
           setBundle((prev) => ({ ...prev, tasks: envelope.data.tasks }));
@@ -219,19 +219,6 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         return response.data;
       }),
     [actor, mutate],
-  );
-
-  const extractSketch = useCallback(
-    async (sceneId: string, fileName: string) => {
-      if (!selectedProjectId) {
-        throw new Error('请先选择项目。');
-      }
-      return mutate(async () => {
-        const response = await api.extractSketch(selectedProjectId, sceneId, fileName, actor);
-        return response.data;
-      });
-    },
-    [actor, mutate, selectedProjectId],
   );
 
   const dispatchTask = useCallback(
@@ -353,7 +340,6 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       updateSceneTemplate,
       replaceAsset,
       solveLayout,
-      extractSketch,
       dispatchTask,
       retryTask,
       submitCommand,
@@ -381,7 +367,6 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       updateSceneTemplate,
       replaceAsset,
       solveLayout,
-      extractSketch,
       dispatchTask,
       retryTask,
       submitCommand,

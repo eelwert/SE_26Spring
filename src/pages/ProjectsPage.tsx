@@ -3,7 +3,7 @@ import { Download, FileUp, Plus, Replace, Save, SlidersHorizontal } from 'lucide
 import { useSession } from '../context/SessionContext';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { LayoutPoint } from '../types/domain';
-import { Button, EmptyState, Field, IconButton, Panel, ProgressBar, SectionHeader, StatusBadge } from '../components/ui';
+import { Button, EmptyState, Field, Panel, ProgressBar, SectionHeader, StatusBadge } from '../components/ui';
 
 const targetTypes = ['tree', 'road_material', 'seat', 'building_facade', 'vehicle'];
 
@@ -32,7 +32,7 @@ export function ProjectsPage() {
     updateSceneTemplate,
     replaceAsset,
     solveLayout,
-    extractSketch,
+    submitCommand,
   } = useWorkspace();
   const [projectName, setProjectName] = useState('');
   const [projectScale, setProjectScale] = useState(1.0);
@@ -44,6 +44,7 @@ export function ProjectsPage() {
   const [targetType, setTargetType] = useState(targetTypes[0]);
   const [points, setPoints] = useState(defaultPoints);
   const [sketchFile, setSketchFile] = useState('river-layout-sketch.png');
+  const [sketchBase64, setSketchBase64] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
 
   const canWrite = hasPermission('project:write');
@@ -115,8 +116,29 @@ export function ProjectsPage() {
   };
 
   const handleSketch = async () => {
-    if (!selectedSceneId) return;
-    await guardedAction('sketch', async () => extractSketch(selectedSceneId, sketchFile || 'uploaded-sketch.png'));
+    if (!selectedProjectId || !selectedSceneId || !sketchBase64) return;
+    await guardedAction('sketch', async () =>
+      submitCommand({
+        projectId: selectedProjectId,
+        sceneId: selectedSceneId,
+        text: '',
+        modalities: ['sketch'],
+        attachmentNames: [sketchFile || 'uploaded-sketch.png'],
+        imageBase64: sketchBase64,
+      }),
+    );
+  };
+
+  const handleSketchFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setSketchFile(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result);
+      setSketchBase64(result.includes(',') ? result.split(',')[1] : result);
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -309,10 +331,10 @@ export function ProjectsPage() {
               <SectionHeader title="草图点线提取" />
               <div className="sketch-dropzone">
                 <FileUp size={26} />
-                <input value={sketchFile} onChange={(event) => setSketchFile(event.target.value)} />
-                <span>PNG/JPEG / 20MB 以内</span>
+                <input type="file" accept="image/*" onChange={handleSketchFileChange} />
+                <span>{sketchFile ? `${sketchFile} / 通过多模态草图接口提交` : 'PNG/JPEG / 20MB 以内'}</span>
               </div>
-              <Button onClick={() => void handleSketch()} isLoading={busyAction === 'sketch'} disabled={!hasPermission('layout:edit')}>
+              <Button onClick={() => void handleSketch()} isLoading={busyAction === 'sketch'} disabled={!hasPermission('layout:edit') || !sketchBase64}>
                 <Download size={16} />
                 提取拓扑
               </Button>
@@ -334,9 +356,6 @@ export function ProjectsPage() {
                       <ProgressBar value={task.progress} />
                       <small>{task.progress}%</small>
                     </div>
-                    <IconButton label="查看任务参数">
-                      <Download size={16} />
-                    </IconButton>
                   </div>
                 ))}
               </div>

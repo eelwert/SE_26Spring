@@ -1,22 +1,10 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import {
-  Activity,
-  Boxes,
-  BrainCircuit,
-  ClipboardList,
-  GitCompareArrows,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  PanelLeftClose,
-  Settings,
-  ShieldCheck,
-  Workflow,
-} from 'lucide-react';
+import { Activity, Boxes, BrainCircuit, GitCompareArrows, LayoutDashboard, LogOut, Menu, PanelLeftClose, ServerCog, Settings, ShieldCheck, UserCog, WandSparkles, Workflow } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useSession } from '../context/SessionContext';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { roleLabels, type PermissionCode } from '../types/domain';
+import { BACKEND_ORIGIN, BACKEND_START_COMMAND } from '../services/api/config';
+import { roleLabels, type PermissionCode, type RoleCode } from '../types/domain';
 import { IconButton, InlineError, LoadingBlock, StatusBadge } from './ui';
 
 interface NavItem {
@@ -35,6 +23,21 @@ const navItems: NavItem[] = [
   { path: '/audit', label: '审计版本', icon: GitCompareArrows, permission: 'audit:read' },
   { path: '/settings', label: '系统设置', icon: Settings, permission: 'settings:write' },
 ];
+
+const roleNavItems: Record<RoleCode, NavItem[]> = {
+  modeler: [
+    { path: '/modeler', label: '建模师门户', icon: WandSparkles, permission: 'project:read' },
+    ...navItems.filter((item) => ['project:read', 'task:dispatch', 'multimodal:execute', 'audit:read'].includes(item.permission)),
+  ],
+  analyst: [
+    { path: '/analyst', label: '分析师门户', icon: Activity, permission: 'simulation:run' },
+    ...navItems.filter((item) => ['simulation:run', 'multimodal:execute', 'task:dispatch', 'project:read', 'audit:read'].includes(item.permission)),
+  ],
+  admin: [
+    { path: '/admin', label: '管理员门户', icon: UserCog, permission: 'settings:write' },
+    ...navItems.filter((item) => ['audit:read', 'settings:write', 'project:read', 'task:dispatch', 'simulation:run'].includes(item.permission)),
+  ],
+};
 
 export function AppLayout() {
   const { session, logout, hasPermission, switchDemoRole } = useSession();
@@ -56,7 +59,11 @@ export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const availableNav = useMemo(() => navItems.filter((item) => hasPermission(item.permission)), [hasPermission]);
+  const activeRole = session?.user.role ?? 'modeler';
+  const availableNav = useMemo(
+    () => roleNavItems[activeRole].filter((item) => hasPermission(item.permission)),
+    [activeRole, hasPermission],
+  );
   const projectScenes = scenes.filter((scene) => scene.projectId === selectedProjectId);
   const isSettingsRoute = location.pathname.includes('/settings');
 
@@ -151,7 +158,7 @@ export function AppLayout() {
         <main className="content">
           {error ? <InlineError message={error} onDismiss={clearError} /> : null}
           {isLoading && projects.length === 0 ? (
-            <LoadingBlock label="正在初始化角色工作台与 mock 数据" />
+            <LoadingBlock label="正在从后端加载工作区数据" />
           ) : (
             <>
               <div className="workspace-ribbon">
@@ -160,10 +167,12 @@ export function AppLayout() {
                   RBAC 已装配：{session ? roleLabels[session.user.role] : '未登录'}
                 </span>
                 <span>
-                  <ClipboardList size={16} />
-                  所有数据请求经由 service/api mock 门面
+                  <ServerCog size={16} />
+                  后端服务：{BACKEND_ORIGIN}
                 </span>
-                <span className={isSettingsRoute ? 'ribbon-focus' : ''}>后端接入点已预留</span>
+                <span className={isSettingsRoute ? 'ribbon-focus' : ''} title={BACKEND_START_COMMAND}>
+                  默认连接真实后端
+                </span>
               </div>
               <Outlet />
             </>

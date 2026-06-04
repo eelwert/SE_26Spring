@@ -4,6 +4,7 @@ import { ArrowRight, Building2, Eye, EyeOff, ShieldCheck, UsersRound, WandSparkl
 import { useSession } from '../context/SessionContext';
 import { roleDescriptions, roleLabels, type RoleCode } from '../types/domain';
 import { Button, Field, InlineError, StatusBadge } from '../components/ui';
+import { getLandingPathForRole } from '../utils/roleRoutes';
 
 const demoAccounts: Array<{ role: RoleCode; email: string; icon: React.ElementType }> = [
   { role: 'modeler', email: 'modeler@nku.city', icon: Building2 },
@@ -36,7 +37,7 @@ export function LoginPage() {
     setError(null);
     try {
       await login({ email, password, role: selectedRole });
-      navigate('/', { replace: true });
+      navigate(getLandingPathForRole(selectedRole), { replace: true });
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '登录失败。');
     } finally {

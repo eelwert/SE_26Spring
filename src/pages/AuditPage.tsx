@@ -1,5 +1,5 @@
 import { FormEvent, useMemo, useState } from 'react';
-import { GitCompareArrows, RotateCcw, Save, Search } from 'lucide-react';
+import { RotateCcw, Save, Search } from 'lucide-react';
 import { useSession } from '../context/SessionContext';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { Button, EmptyState, Field, Panel, SectionHeader, StatusBadge } from '../components/ui';
@@ -52,7 +52,7 @@ export function AuditPage() {
 
   return (
     <div className="page-stack">
-      <SectionHeader title="审计与版本" description="追加式日志、证据哈希、版本快照、差异对比与回滚。" />
+      <SectionHeader title="审计与版本" description="追加式日志、证据哈希、版本快照与回滚。" />
 
       <div className="audit-layout">
         <Panel>
@@ -78,10 +78,6 @@ export function AuditPage() {
                   </small>
                 </div>
                 <div className="version-actions">
-                  <Button size="sm" variant="secondary">
-                    <GitCompareArrows size={14} />
-                    差异
-                  </Button>
                   <Button
                     size="sm"
                     variant="danger"
@@ -99,28 +95,28 @@ export function AuditPage() {
         </Panel>
 
         <Panel>
-          <SectionHeader title="差异预览" />
-          {sceneVersions.length >= 2 ? (
+          <SectionHeader title="版本摘要" />
+          {sceneVersions.length ? (
             <div className="diff-preview">
               <div>
-                <span>对象新增</span>
-                <strong>+{sceneVersions[0].changeCount}</strong>
-              </div>
-              <div>
-                <span>材质替换</span>
-                <strong>12</strong>
-              </div>
-              <div>
-                <span>布局调整</span>
-                <strong>8</strong>
-              </div>
-              <div>
-                <span>规则版本</span>
+                <span>最新版本</span>
                 <strong>{sceneVersions[0].version}</strong>
+              </div>
+              <div>
+                <span>变更数量</span>
+                <strong>{sceneVersions[0].changeCount}</strong>
+              </div>
+              <div>
+                <span>创建人</span>
+                <strong>{sceneVersions[0].author}</strong>
+              </div>
+              <div>
+                <span>可回滚</span>
+                <strong>{sceneVersions[0].rollbackable ? '是' : '否'}</strong>
               </div>
             </div>
           ) : (
-            <EmptyState title="快照不足" description="至少两个快照后可比较差异。" />
+            <EmptyState title="暂无快照" description="保存快照后会显示最新版本摘要。" />
           )}
         </Panel>
       </div>

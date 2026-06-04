@@ -1741,6 +1741,262 @@ code {
   align-content: start;
 }
 
+.role-portal {
+  gap: 16px;
+}
+
+.role-hero {
+  min-height: 184px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(247, 249, 250, 0.9)),
+    var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px;
+  overflow: hidden;
+  position: relative;
+}
+
+.role-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto 20px 18px auto;
+  width: 180px;
+  height: 84px;
+  border: 1px solid rgba(174, 190, 199, 0.5);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, transparent 48%, rgba(17, 106, 114, 0.22) 49%, rgba(17, 106, 114, 0.22) 52%, transparent 53%),
+    linear-gradient(0deg, transparent 48%, rgba(184, 96, 29, 0.18) 49%, rgba(184, 96, 29, 0.18) 52%, transparent 53%),
+    rgba(231, 237, 240, 0.72);
+  pointer-events: none;
+}
+
+.role-hero h1 {
+  margin: 6px 0 8px;
+  font-size: 32px;
+  line-height: 1.12;
+}
+
+.role-hero p {
+  margin: 0;
+  color: var(--muted);
+  max-width: 720px;
+}
+
+.eyebrow {
+  color: var(--primary);
+  font-weight: 800;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.hero-actions,
+.admin-lockup {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-lockup {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.notice-row,
+.compact-setting-row,
+.user-admin-row {
+  min-height: 58px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.notice-row {
+  justify-content: flex-start;
+  color: var(--primary-strong);
+}
+
+.user-admin-list {
+  display: grid;
+  gap: 10px;
+}
+
+.user-admin-row > div,
+.compact-setting-row > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.user-admin-row span,
+.compact-setting-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.user-admin-row.archived {
+  opacity: 0.68;
+}
+
+.json-preview {
+  border: 1px solid var(--line);
+  background: #18272d;
+  color: #e9f5f6;
+  border-radius: 8px;
+  padding: 12px;
+  min-height: 318px;
+  overflow: auto;
+}
+
+.json-preview pre {
+  margin: 0;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.hero-mini-map,
+.traffic-board {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.5) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.5) 1px, transparent 1px),
+    #dce8eb;
+  background-size: 28px 28px;
+  overflow: hidden;
+}
+
+.hero-mini-map {
+  width: 220px;
+  height: 118px;
+  flex: 0 0 auto;
+  z-index: 1;
+}
+
+.traffic-board {
+  min-height: 236px;
+  margin-top: 14px;
+}
+
+.traffic-road,
+.vehicle-dot,
+.person-dot,
+.traffic-light {
+  position: absolute;
+}
+
+.traffic-road {
+  height: 14px;
+  background: #60747d;
+  border: 2px solid #fff;
+}
+
+.traffic-road.road-main {
+  width: 76%;
+  left: 10%;
+  top: 48%;
+}
+
+.traffic-road.road-cross {
+  width: 58%;
+  left: 24%;
+  top: 48%;
+  transform: rotate(90deg);
+}
+
+.vehicle-dot {
+  width: 20px;
+  height: 10px;
+  background: var(--accent);
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.person-dot {
+  width: 9px;
+  height: 9px;
+  background: var(--primary);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(17, 106, 114, 0.12);
+}
+
+.car-a {
+  left: 22%;
+  top: 45%;
+}
+
+.car-b {
+  left: 64%;
+  top: 51%;
+}
+
+.walker-a {
+  left: 45%;
+  top: 32%;
+}
+
+.walker-b {
+  left: 54%;
+  top: 68%;
+}
+
+.traffic-light {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 3px rgba(26, 36, 41, 0.16);
+}
+
+.traffic-light.red {
+  left: 47%;
+  top: 42%;
+  background: var(--bad);
+}
+
+.traffic-light.green {
+  left: 52%;
+  top: 54%;
+  background: var(--good);
+}
+
+.landscape-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.landscape-options span {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
 @media (max-width: 1180px) {
   .login-page,
   .dashboard-grid,
@@ -1760,7 +2016,8 @@ code {
   .plan-board,
   .metric-list,
   .plugin-grid,
-  .policy-grid {
+  .policy-grid,
+  .landscape-options {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1838,8 +2095,21 @@ code {
   .plugin-grid,
   .policy-grid,
   .health-grid,
-  .plan-board {
+  .plan-board,
+  .landscape-options {
     grid-template-columns: 1fr;
+  }
+
+  .role-hero,
+  .notice-row,
+  .compact-setting-row,
+  .user-admin-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hero-mini-map {
+    width: 100%;
   }
 
   .task-row,
