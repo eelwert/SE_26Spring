@@ -5,6 +5,7 @@ Response format: ApiEnvelope<T> = { traceId, data, message? }
 
 import time
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -52,7 +53,6 @@ def _now():
 
 @router.post("/auth/login")
 def login(request: LoginRequest):
-    import time
     store.frontend_active = time.time()
     user = next((u for u in store.demo_users if u.email == request.email or u.role == request.role), None)
     if not user or request.password != store.DEMO_PASSWORD:
@@ -60,7 +60,7 @@ def login(request: LoginRequest):
     session = Session(
         token=f"jwt-{user.role}-{int(time.time())}",
         user=user,
-        expiresAt=time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(time.time() + 28800)),
+        expiresAt=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
     )
     return _ok(session)
 
