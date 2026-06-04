@@ -177,10 +177,12 @@ export function ProjectsPage() {
             <Field label="标签">
               <input value={projectTags} onChange={(event) => setProjectTags(event.target.value)} disabled={!canWrite} />
             </Field>
-            <Button type="submit" isLoading={busyAction === 'create-project'} disabled={!canWrite}>
-              <Plus size={16} />
-              新建项目
-            </Button>
+            <div className="form-actions">
+              <Button type="submit" isLoading={busyAction === 'create-project'} disabled={!canWrite}>
+                <Plus size={16} />
+                新建项目
+              </Button>
+            </div>
           </form>
         </Panel>
 
@@ -254,10 +256,12 @@ export function ProjectsPage() {
                   <span>{selectedTemplate.conflictHints[0]}</span>
                 </div>
               ) : null}
-              <Button onClick={() => void handleTemplateUpdate()} isLoading={busyAction === 'template'} disabled={!selectedSceneId || !canWrite}>
-                <SlidersHorizontal size={16} />
-                应用联动
-              </Button>
+              <div className="form-actions">
+                <Button onClick={() => void handleTemplateUpdate()} isLoading={busyAction === 'template'} disabled={!selectedSceneId || !canWrite}>
+                  <SlidersHorizontal size={16} />
+                  应用联动
+                </Button>
+              </div>
             </Panel>
 
             <Panel>
@@ -290,10 +294,12 @@ export function ProjectsPage() {
                   </div>
                 ))}
               </div>
-              <Button onClick={() => void handleReplaceAsset()} isLoading={busyAction === 'asset'} disabled={!hasPermission('asset:replace')}>
-                <Replace size={16} />
-                下发替换
-              </Button>
+              <div className="form-actions">
+                <Button onClick={() => void handleReplaceAsset()} isLoading={busyAction === 'asset'} disabled={!hasPermission('asset:replace')}>
+                  <Replace size={16} />
+                  下发替换
+                </Button>
+              </div>
             </Panel>
           </div>
 
@@ -321,10 +327,12 @@ export function ProjectsPage() {
                   </div>
                 ))}
               </div>
-              <Button onClick={() => void handleLayout()} isLoading={busyAction === 'layout'} disabled={!hasPermission('layout:edit')}>
-                <Save size={16} />
-                求解布局
-              </Button>
+              <div className="form-actions">
+                <Button onClick={() => void handleLayout()} isLoading={busyAction === 'layout'} disabled={!hasPermission('layout:edit')}>
+                  <Save size={16} />
+                  求解布局
+                </Button>
+              </div>
             </Panel>
 
             <Panel>
@@ -334,10 +342,12 @@ export function ProjectsPage() {
                 <input type="file" accept="image/*" onChange={handleSketchFileChange} />
                 <span>{sketchFile ? `${sketchFile} / 通过多模态草图接口提交` : 'PNG/JPEG / 20MB 以内'}</span>
               </div>
-              <Button onClick={() => void handleSketch()} isLoading={busyAction === 'sketch'} disabled={!hasPermission('layout:edit') || !sketchBase64}>
-                <Download size={16} />
-                提取拓扑
-              </Button>
+              <div className="form-actions">
+                <Button onClick={() => void handleSketch()} isLoading={busyAction === 'sketch'} disabled={!hasPermission('layout:edit') || !sketchBase64}>
+                  <Download size={16} />
+                  提取拓扑
+                </Button>
+              </div>
             </Panel>
           </div>
 

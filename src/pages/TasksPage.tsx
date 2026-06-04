@@ -113,10 +113,12 @@ export function TasksPage() {
               <ShieldAlert size={16} />
               <span>{functionItem?.schemaSummary}</span>
             </div>
-            <Button type="submit" isLoading={isSubmitting} disabled={!hasPermission('task:dispatch')}>
-              <Play size={16} />
-              生成任务
-            </Button>
+            <div className="form-actions">
+              <Button type="submit" isLoading={isSubmitting} disabled={!hasPermission('task:dispatch')}>
+                <Play size={16} />
+                生成任务
+              </Button>
+            </div>
           </form>
         </Panel>
       </div>

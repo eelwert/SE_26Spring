@@ -150,10 +150,12 @@ export function MultimodalPage() {
                 {imageFileName ? <small style={{ color: '#4c1' }}>已选择: {imageFileName}</small> : null}
               </Field>
             ) : null}
-            <Button type="submit" isLoading={isSubmitting}>
-              <Send size={16} />
-              解析指令
-            </Button>
+            <div className="form-actions">
+              <Button type="submit" isLoading={isSubmitting}>
+                <Send size={16} />
+                解析指令
+              </Button>
+            </div>
           </form>
         </Panel>
 

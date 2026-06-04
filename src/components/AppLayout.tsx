@@ -108,7 +108,7 @@ export function AppLayout() {
             </IconButton>
             <div className="context-selectors">
               <label>
-                <span>项目</span>
+                <span>当前项目</span>
                 <select value={selectedProjectId ?? ''} onChange={(event) => setSelectedProjectId(event.target.value)}>
                   {projects.map((project) => (
                     <option key={project.id} value={project.id}>
@@ -118,7 +118,7 @@ export function AppLayout() {
                 </select>
               </label>
               <label>
-                <span>场景</span>
+                <span>当前场景</span>
                 <select value={selectedSceneId ?? ''} onChange={(event) => setSelectedSceneId(event.target.value)}>
                   {projectScenes.map((scene) => (
                     <option key={scene.id} value={scene.id}>
