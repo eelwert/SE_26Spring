@@ -105,12 +105,28 @@ class BuildingRegistry:
         """Return BuildingRecord or None."""
         return self._buildings.get(str(building_id))
 
+    def prune_stale(self):
+        """Remove records whose Blender object has been deleted externally."""
+        import bpy
+        stale_ids = [
+            bid for bid, rec in self._buildings.items()
+            if rec.obj_name not in bpy.data.objects
+        ]
+        for bid in stale_ids:
+            self._spatial.remove(bid)
+            del self._buildings[bid]
+
     def list_all(self):
-        """Return a list of BuildingRecord sorted by id."""
+        """Return a list of BuildingRecord sorted by id.
+
+        Automatically prunes stale entries from manual Blender deletions.
+        """
+        self.prune_stale()
         return sorted(self._buildings.values(), key=lambda r: r.id)
 
     @property
     def count(self):
+        self.prune_stale()
         return len(self._buildings)
 
     # ------------------------------------------------------------------
