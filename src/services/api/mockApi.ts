@@ -303,6 +303,38 @@ class MockSmartCityApi {
       throw new Error('函数未注册或已停用，无法进入调度队列。');
     }
 
+    // Handle list_buildings — return mock building data immediately
+    if (request.functionName === 'list_buildings') {
+      const task = this.createTaskRecord(request, actor, 'success');
+      task.logs = [
+        '共 2 栋受控建筑:',
+        '  B_0001: 位置(0.0, 0.0), 尺寸 57.0x57.0m, 高度 30m',
+        '  B_0002: 位置(72.1, 0.0), 尺寸 57.0x57.0m, 高度 25m',
+      ];
+      task.resultObjects = [
+        JSON.stringify({
+          buildings: [
+            { id: 'B_0001', x: 0, y: 0, width: 57.0, depth: 57.0, height: 30, color: '' },
+            { id: 'B_0002', x: 72.1, y: 0, width: 57.0, depth: 57.0, height: 25, color: '' },
+          ],
+          count: 2,
+        }),
+      ];
+      task.progress = 100;
+      this.tasks = this.tasks.map((item) => (item.id === task.id ? task : item));
+      return envelope(task, 300);
+    }
+
+    // Handle query_space — return mock availability
+    if (request.functionName === 'query_space') {
+      const task = this.createTaskRecord(request, actor, 'success');
+      task.logs = ['区域可用'];
+      task.resultObjects = [JSON.stringify({ available: true, conflict_id: null })];
+      task.progress = 100;
+      this.tasks = this.tasks.map((item) => (item.id === task.id ? task : item));
+      return envelope(task, 200);
+    }
+
     const status = func.risk === 'high' ? 'queued' : 'running';
     const task = this.createTaskRecord(request, actor, status);
     task.logs = ['任务 JSON 已生成', '函数白名单校验通过', status === 'queued' ? '等待二次确认或执行器空闲' : '已下发至插件执行器'];

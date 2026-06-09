@@ -311,6 +311,7 @@ class SubmitCommandRequest(BaseModel):
     modalities: list[str] = ["text"]
     attachmentNames: list[str] = []
     imageBase64: Optional[str] = None  # base64-encoded image for screenshot modality
+    sceneContext: Optional[str] = None  # serialized scene state (building list etc.) for LLM context
 
 
 class StartSimulationRequest(BaseModel):

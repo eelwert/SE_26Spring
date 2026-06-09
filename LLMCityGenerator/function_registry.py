@@ -616,8 +616,6 @@ def _handle_apply_layout_template(params, context):
     scene = context.scene
     if "layout_id" in params:
         lid = str(params["layout_id"])
-        # LLM may send numeric ID (e.g. 0) per FUNCTION_LIST spec;
-        # map to the actual enum key if the value is a digit-only string.
         if lid.isdigit():
             keys = list(LAYOUT_TEMPLATE_ASSETS.keys())
             idx = int(lid) % len(keys)
@@ -629,9 +627,71 @@ def _handle_apply_layout_template(params, context):
         scene.layout_template_columns = _safe_int(params["columns"], 2)
     try:
         bpy.ops.cg.apply_layout_template()
+        # Register created layout blocks in BuildingRegistry for LLM tracking
+        _register_layout_blocks_in_registry()
         return {"success": True, "results": ["布局模板已应用"]}
     except Exception as e:
         return {"success": False, "results": [f"布局模板失败: {str(e)}"]}
+
+
+def _register_layout_blocks_in_registry():
+    """Scan for layout template blocks and register them in BuildingRegistry."""
+    try:
+        from .building_control.building_registry import BuildingRegistry
+    except Exception:
+        return
+
+    registry = BuildingRegistry.instance()
+
+    for obj in bpy.data.objects:
+        if not obj.get("cg_layout_template_object", False):
+            continue
+        # Skip if already registered
+        if obj.get("cg.is_controlled_building", False):
+            continue
+
+        # Determine block dimensions
+        lid = obj.get("cg_layout_template_id", "linear_blocks")
+        layout = LAYOUT_TEMPLATE_ASSETS.get(lid, LAYOUT_TEMPLATE_ASSETS.get("linear_blocks"))
+        if layout is None:
+            w, d = 56.98, 56.98
+        else:
+            w = float(layout.get("block_width", 56.98))
+            d = float(layout.get("block_depth", 56.98))
+
+        # Generate building ID and tag the object
+        building_id = _layout_next_id()
+        obj["cg.is_controlled_building"] = True
+        obj["cg.building_id"] = building_id
+        obj["cg.building_width"] = w
+        obj["cg.building_depth"] = d
+        # Estimate building height from CG modifier socket or default
+        mod = obj.modifiers.get("City_Generator_2.0")
+        h_val = 20.0
+        if mod:
+            try:
+                h_val = float(mod.get("Socket_113", 20))
+            except Exception:
+                pass
+        obj["cg.building_height"] = h_val
+        obj["cg.building_color"] = ""
+
+        registry.register(
+            building_id, obj.name,
+            obj.location.x, obj.location.y, w, d, h_val, "",
+        )
+
+
+def _layout_next_id():
+    """Like _next_id but prefixed L_ for layout blocks."""
+    scene = bpy.context.scene
+    try:
+        counter = scene.cg_building_counter
+    except (AttributeError, TypeError):
+        counter = 0
+    counter += 1
+    scene.cg_building_counter = counter
+    return f"L_{counter:04d}"
 
 
 # --- Registry ---

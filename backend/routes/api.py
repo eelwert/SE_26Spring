@@ -85,6 +85,12 @@ def get_workspace_bundle():
     ))
 
 
+@router.get("/scene/buildings-context")
+def get_buildings_context():
+    """Return the latest cached building list (from Blender-reported list_buildings results)."""
+    return _ok({"context": store.buildings_context or ""})
+
+
 @router.get("/dashboard/summary")
 def get_dashboard_summary():
     running = sum(1 for t in store.tasks if t.status in ("running", "queued"))
@@ -250,10 +256,14 @@ def submit_command(request: SubmitCommandRequest, actor: str = Query("analyst"))
     if len(text) < 6 and len(request.modalities) == 1:
         raise HTTPException(400, "指令信息不足")
 
+    # Use frontend-provided context, or fall back to backend-cached building list
+    scene_context = request.sceneContext or store.buildings_context
+
     # Use the real LLM service to parse the command
     result = llm_svc.parse_command(
         text, request.modalities, request.attachmentNames,
         image_base64=request.imageBase64,
+        scene_context=scene_context,
     )
     plan_nodes = result.get("plan", [])
 
@@ -433,6 +443,12 @@ def task_result(task_id: str, body: dict):
         "logs": task.logs + body.get("results", []),
     })
     store.tasks = [updated if t.id == task_id else t for t in store.tasks]
+
+    # Cache building context when list_buildings completes
+    if task.functionName == "list_buildings" and status == "success":
+        logs = body.get("results", [])
+        if logs:
+            store.buildings_context = "\n".join(logs)
 
     # Notify frontend via WebSocket
     from ..ws_manager import manager

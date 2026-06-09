@@ -98,7 +98,7 @@ SYSTEM_PROMPT = f"""你是智能城市生成系统的 AI 助手。将用户的�
 只输出 JSON，不要额外文字。"""
 
 
-def parse_command(text: str, modalities: list[str], attachment_names: list[str], image_base64: str | None = None) -> dict:
+def parse_command(text: str, modalities: list[str], attachment_names: list[str], image_base64: str | None = None, scene_context: str | None = None) -> dict:
     """Parse user instruction into a function plan.
 
     - sketch → analyze road sketch → return apply_layout params
@@ -157,7 +157,7 @@ def parse_command(text: str, modalities: list[str], attachment_names: list[str],
     if has_text:
         api_key = os.environ.get("DEEPSEEK_API_KEY", "")
         if api_key:
-            text_result = _call_llm(text, api_key)
+            text_result = _call_llm(text, api_key, scene_context=scene_context)
         if not text_result:
             text_result = _parse_local(text, modalities, attachment_names)
 
@@ -298,13 +298,17 @@ VISION_SYSTEM_PROMPT = f"""你是智能城市生成系统的 AI 助手。用户�
 只输出 JSON。"""
 
 
-def _call_llm(text: str, api_key: str) -> dict | None:
+def _call_llm(text: str, api_key: str, scene_context: str | None = None) -> dict | None:
     """Try calling DeepSeek API."""
+    # Inject scene context into the user message if provided
+    user_content = text
+    if scene_context:
+        user_content = f"[场景信息]\n{scene_context}\n\n[用户指令]\n{text}"
     payload = json.dumps({
         "model": DEFAULT_MODEL,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": text},
+            {"role": "user", "content": user_content},
         ],
         "temperature": 0.3,
         "max_tokens": 1024,
@@ -330,17 +334,20 @@ def _call_llm(text: str, api_key: str) -> dict | None:
         return _extract_json(content)
     except Exception:
         # Try curl as fallback
-        return _call_via_curl(text, api_key)
+        return _call_via_curl(text, api_key, scene_context=scene_context)
 
 
-def _call_via_curl(text: str, api_key: str) -> dict | None:
+def _call_via_curl(text: str, api_key: str, scene_context: str | None = None) -> dict | None:
     """Use system curl as fallback for network issues."""
     import subprocess
+    user_content = text
+    if scene_context:
+        user_content = f"[场景信息]\n{scene_context}\n\n[用户指令]\n{text}"
     payload = json.dumps({
         "model": DEFAULT_MODEL,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": text},
+            {"role": "user", "content": user_content},
         ],
         "temperature": 0.3,
         "max_tokens": 1024,

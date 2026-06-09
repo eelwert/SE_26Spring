@@ -1,5 +1,5 @@
-import { FormEvent, useMemo, useState } from 'react';
-import { BrainCircuit, Check, FileImage, MessageSquareText, Play, Send, SquarePen } from 'lucide-react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { BrainCircuit, Check, FileImage, MessageSquareText, Play, RefreshCw, Send, SquarePen } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { Modality } from '../types/domain';
 import { Button, EmptyState, Field, Panel, ProgressBar, SectionHeader, StatusBadge } from '../components/ui';
@@ -22,16 +22,25 @@ export function MultimodalPage() {
     selectedSceneId,
     commands,
     tasks,
+    buildingsCache,
     submitCommand,
     dispatchPlan,
+    refreshSceneContext,
   } = useWorkspace();
   const [text, setText] = useState(promptPresets[0]);
+  const [includeContext, setIncludeContext] = useState(true);
   const [modalities, setModalities] = useState<Modality[]>(['text']);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imageFileName, setImageFileName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDispatching, setIsDispatching] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [isRefreshingContext, setIsRefreshingContext] = useState(false);
+
+  // Refresh building context on mount so LLM has scene info
+  useEffect(() => {
+    refreshSceneContext();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -92,6 +101,7 @@ export function MultimodalPage() {
         modalities,
         attachmentNames: imageFileName ? [imageFileName] : [],
         imageBase64: imageBase64 ?? undefined,
+        sceneContext: includeContext ? (buildingsCache ?? '') : '',
       });
     } catch (caught) {
       setLocalError(caught instanceof Error ? caught.message : '多模态解析失败。');
@@ -150,6 +160,47 @@ export function MultimodalPage() {
                 {imageFileName ? <small style={{ color: '#4c1' }}>已选择: {imageFileName}</small> : null}
               </Field>
             ) : null}
+
+            {/* Building context panel */}
+            <Field label="场景建筑上下文">
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    setIsRefreshingContext(true);
+                    await refreshSceneContext();
+                    setIsRefreshingContext(false);
+                  }}
+                  isLoading={isRefreshingContext}
+                >
+                  <RefreshCw size={14} />
+                  刷新建筑列表
+                </Button>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={includeContext}
+                    onChange={(e) => setIncludeContext(e.target.checked)}
+                  />
+                  发送时附带
+                </label>
+              </div>
+              {buildingsCache ? (
+                <pre style={{
+                  marginTop: 8, padding: 10, background: '#111', color: '#4c1',
+                  borderRadius: 6, fontSize: 12, maxHeight: 180, overflowY: 'auto',
+                  whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                }}>
+                  {buildingsCache}
+                </pre>
+              ) : (
+                <div style={{ marginTop: 8, padding: 10, background: '#1a1a1a', borderRadius: 6, fontSize: 12, color: '#888' }}>
+                  暂未获取到建筑列表。请点击"刷新建筑列表"按钮（需 Blender 后端在线）。
+                </div>
+              )}
+            </Field>
+
             <Button type="submit" isLoading={isSubmitting}>
               <Send size={16} />
               解析指令
