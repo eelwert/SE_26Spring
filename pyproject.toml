@@ -4,4 +4,5 @@ pythonpath = ["."]
 addopts = "-ra"
 markers = [
   "ai_integration: tests that call real external AI providers and require API keys",
+  "performance: lightweight performance baseline tests for local backend flows",
 ]

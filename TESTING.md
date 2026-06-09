@@ -195,6 +195,38 @@ http://127.0.0.1:5173
 
 这条整体测试不依赖真实 LLM 或真实 Blender，但已经覆盖真实前端、真实后端、任务队列、假 Blender 回执和前端 WebSocket 刷新。
 
+## 性能测试
+
+已补充基础性能测试，位置：
+
+```text
+tests/backend/test_performance_basic.py
+```
+
+运行：
+
+```powershell
+python -m pytest tests/backend/test_performance_basic.py
+```
+
+只运行性能基线测试：
+
+```powershell
+python -m pytest -m performance
+```
+
+覆盖内容：
+
+- 核心 API 延迟基线：`POST /api/auth/login`、`GET /api/workspace/bundle`、`GET /api/dashboard/summary`
+- 本地 fallback LLM 解析延迟：`POST /api/commands/submit`
+- 实时更新延迟：`POST /api/tasks/{id}/result` 到 `/ws/frontend` 收到 `task_update`
+
+说明：
+
+- 这些测试属于轻量性能基线测试，不是并发压测或长稳测试。
+- 当前阈值用于约束本地开发环境和 CI 中的明显性能回退。
+- 由于项目当前大量逻辑基于内存 store 和本地 TestClient，这些测试更适合作为回归基线，而不是最终生产容量评估。
+
 ## 构建与 lint
 
 前端构建：
