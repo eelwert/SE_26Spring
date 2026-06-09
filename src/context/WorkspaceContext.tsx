@@ -47,9 +47,11 @@ interface WorkspaceContextValue {
   summary: DashboardSummary | null;
   selectedProject?: Project;
   selectedScene?: Scene;
+  buildingsCache: string | null;
   setSelectedProjectId: (projectId: string) => void;
   setSelectedSceneId: (sceneId: string) => void;
   refreshWorkspace: () => Promise<void>;
+  refreshSceneContext: () => Promise<void>;
   clearError: () => void;
   createProject: (request: CreateProjectRequest) => Promise<Project>;
   updateSceneTemplate: (request: UpdateSceneTemplateRequest) => Promise<void>;
@@ -92,6 +94,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [selectedSceneId, setSelectedSceneIdState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [buildingsCache, setBuildingsCache] = useState<string | null>(null);
 
   const actor = session?.user.name ?? '演示用户';
 
@@ -131,6 +134,16 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     void refreshWorkspace();
   }, [refreshWorkspace]);
 
+  // Extract building context from completed list_buildings tasks
+  const extractBuildingContext = useCallback((tasks: Task[]): string | null => {
+    const listBuildingsTask = tasks
+      .filter((t) => t.functionName === 'list_buildings' && t.status === 'success')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+    if (!listBuildingsTask || !listBuildingsTask.logs.length) return null;
+    return listBuildingsTask.logs.join('\n');
+  }, []);
+
+  // WebSocket real-time task updates (replaces polling)
   useEffect(() => {
     if (!isAuthenticated) {
       wsClient.disconnect();
@@ -152,13 +165,34 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
             : task,
         ),
       }));
+      // Extract building context from updated tasks
+      setBundle((prev) => {
+        const ctx = extractBuildingContext(prev.tasks);
+        if (ctx) setBuildingsCache(ctx);
+        return prev;
+      });
     });
 
     return () => {
       unsubscribe();
       wsClient.disconnect();
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, extractBuildingContext]);
+
+  // Poll backend for building context cache (lightweight, complements WebSocket)
+  useEffect(() => {
+    const poll = async () => {
+      try {
+        const ctxRes = await fetch(backendFetchUrl('/scene/buildings-context'), { cache: 'no-store' });
+        const ctxEnvelope = await ctxRes.json() as { data: { context: string } };
+        if (ctxEnvelope?.data?.context) {
+          setBuildingsCache((prev) => prev || ctxEnvelope.data.context);
+        }
+      } catch { /* endpoint may not exist yet */ }
+    };
+    const timer = setInterval(poll, 3000);
+    return () => clearInterval(timer);
+  }, []);
 
   const selectedProject = useMemo(
     () => bundle.projects.find((project) => project.id === selectedProjectId),
@@ -253,13 +287,44 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     [actor, mutate],
   );
 
+  const refreshSceneContext = useCallback(async () => {
+    // Dispatch list_buildings to refresh the building cache
+    try {
+      const response = await api.dispatchTask({
+        projectId: selectedProjectId ?? '',
+        sceneId: selectedSceneId ?? '',
+        functionName: 'list_buildings',
+        title: '获取建筑列表',
+        priority: 2,
+        params: {},
+        dependsOn: [],
+      }, actor);
+      const task = response.data;
+      // In mock mode, logs are filled immediately
+      if (task.status === 'success' && task.logs.length) {
+        setBuildingsCache(task.logs.join('\n'));
+      }
+      // Also update local task list
+      setBundle((prev) => ({
+        ...prev,
+        tasks: [task, ...prev.tasks.filter((t) => t.id !== task.id)],
+      }));
+    } catch { /* ignore — context will remain stale */ }
+  }, [actor, selectedProjectId, selectedSceneId]);
+
   const submitCommand = useCallback(
     async (request: SubmitCommandRequest) =>
       mutate(async () => {
-        const response = await api.submitCommand(request, actor);
+        // Respect explicit sceneContext from caller; auto-inject from cache otherwise
+        const enriched = 'sceneContext' in request
+          ? request
+          : buildingsCache
+            ? { ...request, sceneContext: buildingsCache }
+            : request;
+        const response = await api.submitCommand(enriched, actor);
         return response.data;
       }),
-    [actor, mutate],
+    [actor, mutate, buildingsCache],
   );
 
   const dispatchPlan = useCallback(
@@ -346,9 +411,11 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       summary,
       selectedProject,
       selectedScene,
+      buildingsCache,
       setSelectedProjectId,
       setSelectedSceneId,
       refreshWorkspace,
+      refreshSceneContext,
       clearError: () => setError(null),
       createProject,
       updateSceneTemplate,
@@ -374,9 +441,11 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       summary,
       selectedProject,
       selectedScene,
+      buildingsCache,
       setSelectedProjectId,
       setSelectedSceneId,
       refreshWorkspace,
+      refreshSceneContext,
       createProject,
       updateSceneTemplate,
       replaceAsset,

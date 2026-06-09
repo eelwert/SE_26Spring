@@ -50,9 +50,15 @@ FUNCTION_LIST = [
     {"name": "delete_furniture", "params": {"asset_id": "string"}},
     {"name": "place_furniture", "params": {"asset_id": "string", "min_count": "int", "max_count": "int", "spacing": "number", "scale": "number", "randomize": "bool", "placement_offset": "number", "clear_previous": "bool"}},
     {"name": "apply_layout_template", "params": {"layout_id": "int", "rows": "int", "columns": "int"}},
+    # Building control
+    {"name": "place_building", "params": {"x": "number 中心X(米)", "y": "number 中心Y(米)", "width": "number 宽度(米) 默认10", "depth": "number 深度(米) 默认10", "height": "number 建筑高度(米) 默认20"}},
+    {"name": "move_building", "params": {"building_id": "string 如B_0001", "x": "number 目标X", "y": "number 目标Y"}},
+    {"name": "delete_building", "params": {"building_id": "string 如B_0001"}},
+    {"name": "list_buildings", "params": {}},
+    {"name": "query_space", "params": {"x": "number 区域中心X", "y": "number 区域中心Y", "width": "number 区域宽度", "depth": "number 区域深度"}},
     # Member C
-    {"name": "generate_terrain", "params": {"hill_height": "number", "noise_scale": "number"}},
-    {"name": "generate_lake", "params": {"lake_size": "number", "ripple_strength": "number"}},
+    {"name": "generate_terrain", "params": {"x": "number 中心X(米)", "y": "number 中心Y(米)", "hill_height": "number", "noise_scale": "number"}},
+    {"name": "generate_lake", "params": {"x": "number 中心X(米)", "y": "number 中心Y(米)", "block_size": "number 地块边长(米) 默认30", "lake_size": "number 湖面半径(米) 默认10 不超过block_size一半", "ripple_strength": "number"}},
     {"name": "generate_river", "params": {"river_width": "number", "seed": "int"}},
     {"name": "add_boat", "params": {"boat_scale": "number", "flow_speed": "number"}},
     # Member D
@@ -81,10 +87,19 @@ SYSTEM_PROMPT = f"""你是智能城市生成系统的 AI 助手。将用户的�
 
 天气映射：晴天→晴, 阴天→阴, 下雨→小雨, 暴雨→大雨, 晚上→20:00, 傍晚→18:00
 模板映射：滨水/河岸→1, 商业街→2, 校园→4, 住宅→8
+
+位置映射（默认城市尺度约200m，坐标系原点为中心）：
+- 东/东边/东侧/右侧 → x 正值, 约 +80 ~ +150
+- 西/西边/西侧/左侧 → x 负值, 约 -80 ~ -150
+- 北/北边/北侧/上方 → y 正值, 约 +80 ~ +150
+- 南/南边/南侧/下方 → y 负值, 约 -80 ~ -150
+- 东北/东南/西北/西南 → 对应象限组合
+所有需要生成场景元素（地形、湖泊、河流、建筑区块）的函数都支持 x,y 位置参数。
+generate_lake 的 lake_size（湖面半径）不应超过 block_size（地块边长）的一半。
 只输出 JSON，不要额外文字。"""
 
 
-def parse_command(text: str, modalities: list[str], attachment_names: list[str], image_base64: str | None = None) -> dict:
+def parse_command(text: str, modalities: list[str], attachment_names: list[str], image_base64: str | None = None, scene_context: str | None = None) -> dict:
     """Parse user instruction into a function plan.
 
     - sketch → analyze road sketch → return apply_layout params
@@ -143,7 +158,7 @@ def parse_command(text: str, modalities: list[str], attachment_names: list[str],
     if has_text:
         api_key = os.environ.get("DEEPSEEK_API_KEY", "")
         if api_key:
-            text_result = _call_llm(text, api_key)
+            text_result = _call_llm(text, api_key, scene_context=scene_context)
         if not text_result:
             text_result = _parse_local(text, modalities, attachment_names)
 
@@ -284,13 +299,17 @@ VISION_SYSTEM_PROMPT = f"""你是智能城市生成系统的 AI 助手。用户�
 只输出 JSON。"""
 
 
-def _call_llm(text: str, api_key: str) -> dict | None:
+def _call_llm(text: str, api_key: str, scene_context: str | None = None) -> dict | None:
     """Try calling DeepSeek API."""
+    # Inject scene context into the user message if provided
+    user_content = text
+    if scene_context:
+        user_content = f"[场景信息]\n{scene_context}\n\n[用户指令]\n{text}"
     payload = json.dumps({
         "model": DEFAULT_MODEL,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": text},
+            {"role": "user", "content": user_content},
         ],
         "temperature": 0.3,
         "max_tokens": 1024,
@@ -316,17 +335,20 @@ def _call_llm(text: str, api_key: str) -> dict | None:
         return _extract_json(content)
     except Exception:
         # Try curl as fallback
-        return _call_via_curl(text, api_key)
+        return _call_via_curl(text, api_key, scene_context=scene_context)
 
 
-def _call_via_curl(text: str, api_key: str) -> dict | None:
+def _call_via_curl(text: str, api_key: str, scene_context: str | None = None) -> dict | None:
     """Use system curl as fallback for network issues."""
     import subprocess
+    user_content = text
+    if scene_context:
+        user_content = f"[场景信息]\n{scene_context}\n\n[用户指令]\n{text}"
     payload = json.dumps({
         "model": DEFAULT_MODEL,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": text},
+            {"role": "user", "content": user_content},
         ],
         "temperature": 0.3,
         "max_tokens": 1024,

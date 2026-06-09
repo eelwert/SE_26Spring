@@ -19,6 +19,10 @@ SYSTEM_PROMPT_TEMPLATE = """你是智能城市生成系统的AI助手。你的�
 
 {function_list}
 
+## 场景上下文
+
+{scene_context}
+
 ## 输出格式
 
 你必须只返回一个JSON对象，格式如下：
@@ -42,6 +46,8 @@ SYSTEM_PROMPT_TEMPLATE = """你是智能城市生成系统的AI助手。你的�
 6. 天气相关的关键词映射：晴天→晴, 阴天→阴, 下雨/雨天→小雨, 暴雨→大雨, 下雪→雪
 7. 时间相关：早上→08:00, 上午→10:00, 中午→12:00, 下午→14:00, 傍晚→18:00, 晚上→20:00, 深夜→23:00
 8. 模板关键词映射：滨水/河岸→1, 商业街/步行街→2, 交通枢纽/换乘→3, 校园/学校→4, 公园/生态→5, 科技/园区→6, 历史/古城→7, 住宅/小区→8, 工业/物流→9
+9. 如果场景上下文中列出了已有的建筑，移动/删除建筑时必须使用列表中的building_id
+10. 移动建筑时，如果用户说"向Y方向移动100m"，意味着在现有Y坐标上加100（不是移到y=100）
 
 ## 示例
 
@@ -67,13 +73,62 @@ SYSTEM_PROMPT_TEMPLATE = """你是智能城市生成系统的AI助手。你的�
   ],
   "explanation": "已应用滨水活力街区模板，树木密度设为80%，天气切换为傍晚小雨"
 }}
-```"""
+```
+
+{prefix_prompt}"""
 
 
-def _build_system_prompt():
-    """Build the system prompt from the function registry."""
+def _build_system_prompt(scene_context="", prefix_prompt=""):
+    """Build the system prompt from the function registry.
+
+    Args:
+        scene_context: Optional text describing current scene state
+                       (e.g. building list) injected before the rules.
+        prefix_prompt: Optional hint appended BEFORE the final examples
+                       (used for directional/incremental move guidance).
+    """
     func_list = get_registry_for_prompt()
-    return SYSTEM_PROMPT_TEMPLATE.format(function_list=func_list)
+    if not scene_context:
+        scene_context = "当前场景中尚无受控建筑或未获取到场景信息。"
+    if not prefix_prompt:
+        prefix_prompt = ""
+    return SYSTEM_PROMPT_TEMPLATE.format(
+        function_list=func_list,
+        scene_context=scene_context,
+        prefix_prompt=prefix_prompt,
+    )
+
+
+def _gather_scene_context():
+    """Gather current scene state that LLM may need to reason about."""
+    try:
+        from .building_control.building_registry import BuildingRegistry
+        registry = BuildingRegistry.instance()
+        records = registry.list_all()
+        if not records:
+            return "当前场景中尚无受控建筑（通过place_building创建的CG区块）。"
+        lines = ["当前场景中的受控建筑列表（坐标单位：米）："]
+        for r in records:
+            lines.append(
+                f"  - {r.id}: 位置({r.x:.1f}, {r.y:.1f}), "
+                f"尺寸 {r.width:.1f}x{r.depth:.1f}m, 高度 {r.height:.0f}m"
+            )
+        return "\n".join(lines)
+    except Exception:
+        return "当前场景中尚无受控建筑或未获取到场景信息。"
+
+
+def _detect_prefix_hints(user_text):
+    """Detect incremental-move patterns and return guidance for LLM."""
+    hints = []
+    # "向Y方向移动100m" → should add 100 to Y, not set Y=100
+    if "向y" in user_text.lower() or "向 y" in user_text.lower() or "沿y" in user_text.lower():
+        hints.append("'向Y方向'意味着在现有Y坐标上加减偏移量，不是直接设为目标Y值。请根据场景上下文中的建筑当前位置计算目标坐标。")
+    if "向x" in user_text.lower() or "向 x" in user_text.lower() or "沿x" in user_text.lower():
+        hints.append("'向X方向'意味着在现有X坐标上加减偏移量，不是直接设为目标X值。请根据场景上下文中的建筑当前位置计算目标坐标。")
+    if "整体" in user_text and ("移动" in user_text or "平移" in user_text or "偏移" in user_text):
+        hints.append("'整体移动'意味着对场景中所有建筑执行相同的偏移操作。请为每栋建筑分别生成move_building调用。")
+    return "\n".join(f"  [提示] {h}" for h in hints)
 
 
 def _extract_json(text):
@@ -100,7 +155,11 @@ def call_llm(user_text, api_key, api_url=None, model=None):
     """
     api_url = api_url or DEFAULT_API_URL
     model = model or DEFAULT_MODEL
-    system_prompt = _build_system_prompt()
+    scene_context = _gather_scene_context()
+    prefix_prompt = _detect_prefix_hints(user_text)
+    system_prompt = _build_system_prompt(
+        scene_context=scene_context, prefix_prompt=prefix_prompt,
+    )
 
     payload_str = json.dumps({
         "model": model,

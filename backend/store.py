@@ -116,6 +116,22 @@ functions: list[PluginFunction] = [
     PluginFunction(name="apply_layout_template", title="布局模板", category="layout",
                    description="应用预设网格布局模板", enabled=True, risk="low",
                    schemaSummary="layout_id, rows, columns", averageMs=500),
+    # Building control
+    PluginFunction(name="list_buildings", title="列出建筑", category="layout",
+                   description="列出当前场景中所有受控建筑的ID、位置和尺寸", enabled=True, risk="low",
+                   schemaSummary="none", averageMs=200),
+    PluginFunction(name="place_building", title="放置建筑", category="layout",
+                   description="在指定XY坐标放置一栋独立建筑，自动检测重叠", enabled=True, risk="medium",
+                   schemaSummary="x, y, width, depth, height", averageMs=500),
+    PluginFunction(name="move_building", title="移动建筑", category="layout",
+                   description="将已放置的建筑移动到新的XY坐标，自动检测重叠", enabled=True, risk="medium",
+                   schemaSummary="building_id, x, y", averageMs=300),
+    PluginFunction(name="delete_building", title="删除建筑", category="layout",
+                   description="删除指定ID的建筑并释放其占用的空间", enabled=True, risk="medium",
+                   schemaSummary="building_id", averageMs=300),
+    PluginFunction(name="query_space", title="查询空间", category="layout",
+                   description="检查指定矩形区域是否被已有建筑占用", enabled=True, risk="low",
+                   schemaSummary="x, y, width, depth", averageMs=200),
     # Member C: Ecological Scene
     PluginFunction(name="generate_terrain", title="生成山丘地形", category="environment",
                    description="程序化生成有起伏的地形", enabled=True, risk="low",
@@ -159,6 +175,7 @@ audit_logs: list[AuditLog] = []
 versions: list[VersionSnapshot] = []
 blender_connected: bool = False
 blender_info: dict = {}
+buildings_context: str | None = None  # cached building list from last list_buildings task
 frontend_active: float = 0.0  # timestamp of last API request
 
 settings: list[RuntimeSetting] = [

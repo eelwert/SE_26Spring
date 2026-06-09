@@ -6,6 +6,14 @@ to metadata and a handler that executes the operation in Blender.
 
 import bpy
 
+from .building_control.building_api import (
+    _handle_place_building,
+    _handle_move_building,
+    _handle_delete_building,
+    _handle_list_buildings,
+    _handle_query_space,
+)
+
 MODIFIER_NAME = "City_Generator_2.0"
 
 
@@ -398,19 +406,48 @@ def _handle_generate_terrain(params, context):
     if "subdivisions" in params:
         scene.cg_terrain_subdivisions = _safe_int(params["subdivisions"], 30)
     bpy.ops.cg.eco_generate_terrain()
-    return {"success": True, "results": [f"地形已生成（高度={scene.cg_terrain_hill_height}m）"]}
+    target_x = _safe_float(params.get("x"), 0.0)
+    target_y = _safe_float(params.get("y"), 0.0)
+    terrain = bpy.data.objects.get("CG_Terrain")
+    if terrain:
+        terrain.location = (target_x, target_y, terrain.location.z)
+        _register_eco_object(terrain, "T", target_x, target_y,
+                             scene.cg_terrain_grid_size, scene.cg_terrain_grid_size,
+                             scene.cg_terrain_hill_height)
+    pos_msg = f"，位置({target_x:.0f}, {target_y:.0f})" if (target_x or target_y) else ""
+    return {"success": True, "results": [f"地形已生成（高度={scene.cg_terrain_hill_height}m{pos_msg}）"]}
 
 
 def _handle_generate_lake(params, context):
     scene = context.scene
+    if "block_size" in params:
+        scene.cg_lake_block_size = _safe_float(params["block_size"], 30)
     if "lake_size" in params:
-        scene.cg_lake_size = _safe_float(params["lake_size"], 20)
+        scene.cg_lake_size = _safe_float(params["lake_size"], 10)
     if "ripple_strength" in params:
         scene.cg_lake_ripple_strength = _safe_float(params["ripple_strength"], 0.05)
     if "water_color" in params and isinstance(params["water_color"], list):
         scene.cg_lake_water_color = tuple(params["water_color"])
     bpy.ops.cg.eco_generate_lake()
-    return {"success": True, "results": [f"湖泊已生成（大小={scene.cg_lake_size}m）"]}
+    target_x = _safe_float(params.get("x"), 0.0)
+    target_y = _safe_float(params.get("y"), 0.0)
+    block = bpy.data.objects.get("CG_Lake_Block")
+    lake = bpy.data.objects.get("CG_Lake")
+    # Move block first, then align lake's world XY to block's world XY
+    if block:
+        block.location = (target_x, target_y, block.location.z)
+    if lake and block:
+        # Use world-space position to ensure perfect alignment regardless of
+        # any internal offsets introduced by the operator
+        lake_world = block.matrix_world.translation
+        lake.location = (lake_world.x, lake_world.y, lake.location.z)
+    # Register block as a tracked building
+    if block:
+        _register_eco_object(block, "K", target_x, target_y,
+                             scene.cg_lake_block_size, scene.cg_lake_block_size,
+                             scene.cg_lake_size)
+    pos_msg = f"，位置({target_x:.0f}, {target_y:.0f})" if (target_x or target_y) else ""
+    return {"success": True, "results": [f"湖泊已生成（大小={scene.cg_lake_size}m{pos_msg}）"]}
 
 
 def _handle_generate_river(params, context):
@@ -588,16 +625,105 @@ def _handle_delete_furniture(params, context):
 def _handle_apply_layout_template(params, context):
     scene = context.scene
     if "layout_id" in params:
-        scene.layout_template_id = _safe_int(params["layout_id"], 0)
+        lid = str(params["layout_id"])
+        if lid.isdigit():
+            keys = list(LAYOUT_TEMPLATE_ASSETS.keys())
+            idx = int(lid) % len(keys)
+            lid = keys[idx]
+        scene.layout_template_id = lid
     if "rows" in params:
         scene.layout_template_rows = _safe_int(params["rows"], 2)
     if "columns" in params:
         scene.layout_template_columns = _safe_int(params["columns"], 2)
     try:
         bpy.ops.cg.apply_layout_template()
+        # Register created layout blocks in BuildingRegistry for LLM tracking
+        _register_layout_blocks_in_registry()
         return {"success": True, "results": ["布局模板已应用"]}
     except Exception as e:
         return {"success": False, "results": [f"布局模板失败: {str(e)}"]}
+
+
+def _register_eco_object(obj, prefix, x, y, width, depth, height):
+    """Tag an eco-generated object and register it in BuildingRegistry."""
+    try:
+        from .building_control.building_registry import BuildingRegistry
+    except Exception:
+        return
+    if obj.get("cg.is_controlled_building", False):
+        return  # already registered
+    building_id = _eco_next_id(prefix)
+    obj["cg.is_controlled_building"] = True
+    obj["cg.building_id"] = building_id
+    obj["cg.building_width"] = float(width)
+    obj["cg.building_depth"] = float(depth)
+    obj["cg.building_height"] = float(height)
+    obj["cg.building_color"] = ""
+    BuildingRegistry.instance().register(
+        building_id, obj.name, x, y, width, depth, height, "",
+    )
+
+
+def _eco_next_id(prefix):
+    """Generate a prefixed building ID (T=terrain, K=lake, L=layout)."""
+    scene = bpy.context.scene
+    try:
+        counter = scene.cg_building_counter
+    except (AttributeError, TypeError):
+        counter = 0
+    counter += 1
+    scene.cg_building_counter = counter
+    return f"{prefix}_{counter:04d}"
+
+
+def _register_layout_blocks_in_registry():
+    """Scan for layout template blocks and register them in BuildingRegistry."""
+    try:
+        from .building_control.building_registry import BuildingRegistry
+    except Exception:
+        return
+
+    registry = BuildingRegistry.instance()
+
+    for obj in bpy.data.objects:
+        if not obj.get("cg_layout_template_object", False):
+            continue
+        # Skip if already registered
+        if obj.get("cg.is_controlled_building", False):
+            continue
+
+        # Determine block dimensions
+        lid = obj.get("cg_layout_template_id", "linear_blocks")
+        layout = LAYOUT_TEMPLATE_ASSETS.get(lid, LAYOUT_TEMPLATE_ASSETS.get("linear_blocks"))
+        if layout is None:
+            w, d = 56.98, 56.98
+        else:
+            w = float(layout.get("block_width", 56.98))
+            d = float(layout.get("block_depth", 56.98))
+
+        # Generate building ID and tag the object
+        building_id = _eco_next_id("L")
+        obj["cg.is_controlled_building"] = True
+        obj["cg.building_id"] = building_id
+        obj["cg.building_width"] = w
+        obj["cg.building_depth"] = d
+        # Estimate building height from CG modifier socket or default
+        mod = obj.modifiers.get("City_Generator_2.0")
+        h_val = 20.0
+        if mod:
+            try:
+                h_val = float(mod.get("Socket_113", 20))
+            except Exception:
+                pass
+        obj["cg.building_height"] = h_val
+        obj["cg.building_color"] = ""
+
+        registry.register(
+            building_id, obj.name,
+            obj.location.x, obj.location.y, w, d, h_val, "",
+        )
+
+
 
 
 # --- Registry ---
@@ -755,10 +881,12 @@ FUNCTION_REGISTRY = {
         "name": "generate_terrain",
         "title": "生成山丘地形",
         "category": "environment",
-        "description": "程序化生成有起伏的地形（噪声位移）",
+        "description": "程序化生成有起伏的地形（噪声位移），支持指定位置",
         "risk": "low",
-        "schemaSummary": "hill_height, noise_scale, grid_size",
+        "schemaSummary": "x, y, hill_height, noise_scale, grid_size",
         "parameters": {
+            "x": {"type": "number", "description": "地形中心X坐标（米），默认0", "required": False},
+            "y": {"type": "number", "description": "地形中心Y坐标（米），默认0", "required": False},
             "hill_height": {"type": "number", "description": "山丘高度（米）", "required": False},
             "noise_scale": {"type": "number", "description": "噪声缩放（0.1-5.0）", "required": False},
             "grid_size": {"type": "number", "description": "地形网格大小（米）", "required": False},
@@ -769,11 +897,14 @@ FUNCTION_REGISTRY = {
         "name": "generate_lake",
         "title": "生成湖泊",
         "category": "environment",
-        "description": "生成圆形湖泊水面（含波纹材质）",
+        "description": "生成圆形湖泊水面（含波纹材质），支持指定位置。湖面半径不应超过总大小的一半",
         "risk": "low",
-        "schemaSummary": "lake_size, ripple_strength",
+        "schemaSummary": "x, y, block_size, lake_size, ripple_strength",
         "parameters": {
-            "lake_size": {"type": "number", "description": "湖泊大小（半径米）", "required": False},
+            "x": {"type": "number", "description": "湖泊中心X坐标（米），默认0", "required": False},
+            "y": {"type": "number", "description": "湖泊中心Y坐标（米），默认0", "required": False},
+            "block_size": {"type": "number", "description": "公园地块总大小（边长米），默认30", "required": False},
+            "lake_size": {"type": "number", "description": "湖面半径（米），默认10，不应超过block_size的一半", "required": False},
             "ripple_strength": {"type": "number", "description": "波纹强度 (0-1)", "required": False},
         },
         "handler": _handle_generate_lake,
@@ -948,6 +1079,75 @@ FUNCTION_REGISTRY = {
             "asset_id": {"type": "string", "description": "资产: wooden_picnic_table(野餐椅)/small_lpg_tank(小消防罐)/rubber_duck_toy(小黄鸭)", "required": True},
         },
         "handler": _handle_delete_furniture,
+    },
+    # --- Building control ---
+    "place_building": {
+        "name": "place_building",
+        "title": "放置建筑",
+        "category": "layout",
+        "description": "在指定XY坐标放置一栋独立建筑，自动检测重叠",
+        "risk": "medium",
+        "schemaSummary": "x, y, width, depth, height, color",
+        "parameters": {
+            "x": {"type": "number", "description": "建筑底面中心X坐标（米）", "required": True},
+            "y": {"type": "number", "description": "建筑底面中心Y坐标（米）", "required": True},
+            "width": {"type": "number", "description": "建筑宽度X方向（米），默认10", "required": False},
+            "depth": {"type": "number", "description": "建筑深度Y方向（米），默认10", "required": False},
+            "height": {"type": "number", "description": "建筑高度Z方向（米），默认20", "required": False},
+            "color": {"type": "string", "description": "建筑颜色十六进制，如 #CC8844", "required": False},
+        },
+        "handler": _handle_place_building,
+    },
+    "move_building": {
+        "name": "move_building",
+        "title": "移动建筑",
+        "category": "layout",
+        "description": "将已放置的建筑移动到新的XY坐标，自动检测重叠",
+        "risk": "medium",
+        "schemaSummary": "building_id, x, y",
+        "parameters": {
+            "building_id": {"type": "string", "description": "建筑ID，如 B_0001", "required": True},
+            "x": {"type": "number", "description": "目标X坐标（米）", "required": True},
+            "y": {"type": "number", "description": "目标Y坐标（米）", "required": True},
+        },
+        "handler": _handle_move_building,
+    },
+    "delete_building": {
+        "name": "delete_building",
+        "title": "删除建筑",
+        "category": "layout",
+        "description": "删除指定ID的建筑并释放其占用的空间",
+        "risk": "medium",
+        "schemaSummary": "building_id",
+        "parameters": {
+            "building_id": {"type": "string", "description": "要删除的建筑ID，如 B_0001", "required": True},
+        },
+        "handler": _handle_delete_building,
+    },
+    "list_buildings": {
+        "name": "list_buildings",
+        "title": "列出建筑",
+        "category": "layout",
+        "description": "列出当前场景中所有受控建筑的ID、位置和尺寸",
+        "risk": "low",
+        "schemaSummary": "none",
+        "parameters": {},
+        "handler": _handle_list_buildings,
+    },
+    "query_space": {
+        "name": "query_space",
+        "title": "查询空间",
+        "category": "layout",
+        "description": "检查指定矩形区域是否被已有建筑占用",
+        "risk": "low",
+        "schemaSummary": "x, y, width, depth",
+        "parameters": {
+            "x": {"type": "number", "description": "查询区域中心X坐标（米）", "required": True},
+            "y": {"type": "number", "description": "查询区域中心Y坐标（米）", "required": True},
+            "width": {"type": "number", "description": "查询区域宽度（米）", "required": True},
+            "depth": {"type": "number", "description": "查询区域深度（米）", "required": True},
+        },
+        "handler": _handle_query_space,
     },
     # --- Member A: Layout Template ---
     "apply_layout_template": {

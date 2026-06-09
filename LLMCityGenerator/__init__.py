@@ -35,6 +35,11 @@ from .operators import (
     CG_OT_Apply_Selected_3D_Asset_Group,
     CG_OT_Delete_Selected_Mesh_3D_Asset,
 )
+from .building_control.building_ops import (
+    CG_OT_PlaceBuilding,
+    CG_OT_MoveBuilding,
+    CG_OT_DeleteBuilding,
+)
 from .panels import (
     CG_PT_Main_Panel,
     CG_Setting_Panel,
@@ -107,7 +112,11 @@ classes = [
     CG_OT_Apply_Added_3D_Asset,
     CG_OT_Apply_Selected_3D_Asset_Group,
     CG_OT_Delete_Selected_Mesh_3D_Asset,
-    
+    # Building control
+    CG_OT_PlaceBuilding,
+    CG_OT_MoveBuilding,
+    CG_OT_DeleteBuilding,
+
     CG_General_Setting_Panel,
     CG_Street_Setting_Panel,
     CG_Park_Setting_Panel,
