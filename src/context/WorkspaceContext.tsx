@@ -143,7 +143,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     return listBuildingsTask.logs.join('\n');
   }, []);
 
-  // WebSocket real-time task updates (replaces polling)
+  // WebSocket real-time task updates
   useEffect(() => {
     if (!isAuthenticated) {
       wsClient.disconnect();
@@ -152,9 +152,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
 
     wsClient.connect();
     const unsubscribe = wsClient.onUpdate((update) => {
-      setBundle((prev) => ({
-        ...prev,
-        tasks: prev.tasks.map((task) =>
+      setBundle((prev) => {
+        const updatedTasks = prev.tasks.map((task) =>
           task.id === update.taskId
             ? {
                 ...task,
@@ -163,13 +162,11 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
                 logs: update.results.length ? [...task.logs, ...update.results] : task.logs,
               }
             : task,
-        ),
-      }));
-      // Extract building context from updated tasks
-      setBundle((prev) => {
-        const ctx = extractBuildingContext(prev.tasks);
+        );
+        // Extract building context from the updated task list
+        const ctx = extractBuildingContext(updatedTasks);
         if (ctx) setBuildingsCache(ctx);
-        return prev;
+        return { ...prev, tasks: updatedTasks };
       });
     });
 
@@ -179,16 +176,34 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     };
   }, [isAuthenticated, extractBuildingContext]);
 
-  // Poll backend for building context cache (lightweight, complements WebSocket)
+  // Poll backend every 3s for task + building context (fallback when WebSocket unavailable)
   useEffect(() => {
     const poll = async () => {
       try {
-        const ctxRes = await fetch(backendFetchUrl('/scene/buildings-context'), { cache: 'no-store' });
-        const ctxEnvelope = await ctxRes.json() as { data: { context: string } };
-        if (ctxEnvelope?.data?.context) {
-          setBuildingsCache((prev) => prev || ctxEnvelope.data.context);
+        const res = await fetch(backendFetchUrl('/workspace/bundle'), { cache: 'no-store' });
+        const envelope = await res.json() as { data: WorkspaceBundle };
+        if (envelope?.data?.tasks) {
+          setBundle((prev) => ({
+            ...prev,
+            tasks: prev.tasks.length === envelope.data.tasks.length
+              ? envelope.data.tasks.map((newT) => {
+                  const old = prev.tasks.find((t) => t.id === newT.id);
+                  return old && old.status === newT.status ? old : newT;
+                })
+              : envelope.data.tasks,
+          }));
+          const ctx = extractBuildingContext(envelope.data.tasks);
+          if (ctx) setBuildingsCache(ctx);
         }
-      } catch { /* endpoint may not exist yet */ }
+        // Also poll backend's cached building context
+        try {
+          const ctxRes = await fetch(backendFetchUrl('/scene/buildings-context'), { cache: 'no-store' });
+          const ctxEnvelope = await ctxRes.json() as { data: { context: string } };
+          if (ctxEnvelope?.data?.context) {
+            setBuildingsCache((prev) => prev || ctxEnvelope.data.context);
+          }
+        } catch { /* endpoint may not exist yet */ }
+      } catch { /* backend not reachable yet */ }
     };
     const timer = setInterval(poll, 3000);
     return () => clearInterval(timer);
