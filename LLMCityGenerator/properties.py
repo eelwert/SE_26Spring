@@ -563,7 +563,7 @@ def register_scene_properties():
     bpy.types.Scene.cg_lake_size = bpy.props.FloatProperty(
         name="Lake Size",
         description="Radius of the lake",
-        default=20.0, min=1.0, max=100.0, subtype='DISTANCE')
+        default=10.0, min=1.0, max=100.0, subtype='DISTANCE')
     bpy.types.Scene.cg_lake_block_size = bpy.props.FloatProperty(
         name="Block Size",
         description="Size of the square ground block containing the lake",

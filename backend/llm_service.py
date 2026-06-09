@@ -50,9 +50,15 @@ FUNCTION_LIST = [
     {"name": "delete_furniture", "params": {"asset_id": "string"}},
     {"name": "place_furniture", "params": {"asset_id": "string", "min_count": "int", "max_count": "int", "spacing": "number", "scale": "number", "randomize": "bool", "placement_offset": "number", "clear_previous": "bool"}},
     {"name": "apply_layout_template", "params": {"layout_id": "int", "rows": "int", "columns": "int"}},
+    # Building control
+    {"name": "place_building", "params": {"x": "number 中心X(米)", "y": "number 中心Y(米)", "width": "number 宽度(米) 默认10", "depth": "number 深度(米) 默认10", "height": "number 建筑高度(米) 默认20"}},
+    {"name": "move_building", "params": {"building_id": "string 如B_0001", "x": "number 目标X", "y": "number 目标Y"}},
+    {"name": "delete_building", "params": {"building_id": "string 如B_0001"}},
+    {"name": "list_buildings", "params": {}},
+    {"name": "query_space", "params": {"x": "number 区域中心X", "y": "number 区域中心Y", "width": "number 区域宽度", "depth": "number 区域深度"}},
     # Member C
-    {"name": "generate_terrain", "params": {"hill_height": "number", "noise_scale": "number"}},
-    {"name": "generate_lake", "params": {"lake_size": "number", "ripple_strength": "number"}},
+    {"name": "generate_terrain", "params": {"x": "number 中心X(米)", "y": "number 中心Y(米)", "hill_height": "number", "noise_scale": "number"}},
+    {"name": "generate_lake", "params": {"x": "number 中心X(米)", "y": "number 中心Y(米)", "lake_size": "number", "ripple_strength": "number"}},
     {"name": "generate_river", "params": {"river_width": "number", "seed": "int"}},
     {"name": "add_boat", "params": {"boat_scale": "number", "flow_speed": "number"}},
     # Member D
@@ -81,6 +87,14 @@ SYSTEM_PROMPT = f"""你是智能城市生成系统的 AI 助手。将用户的�
 
 天气映射：晴天→晴, 阴天→阴, 下雨→小雨, 暴雨→大雨, 晚上→20:00, 傍晚→18:00
 模板映射：滨水/河岸→1, 商业街→2, 校园→4, 住宅→8
+
+位置映射（默认城市尺度约200m，坐标系原点为中心）：
+- 东/东边/东侧/右侧 → x 正值, 约 +80 ~ +150
+- 西/西边/西侧/左侧 → x 负值, 约 -80 ~ -150
+- 北/北边/北侧/上方 → y 正值, 约 +80 ~ +150
+- 南/南边/南侧/下方 → y 负值, 约 -80 ~ -150
+- 东北/东南/西北/西南 → 对应象限组合
+所有需要生成场景元素（地形、湖泊、河流、建筑区块）的函数都支持 x,y 位置参数。
 只输出 JSON，不要额外文字。"""
 
 

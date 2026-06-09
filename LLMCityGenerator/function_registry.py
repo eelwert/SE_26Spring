@@ -406,7 +406,16 @@ def _handle_generate_terrain(params, context):
     if "subdivisions" in params:
         scene.cg_terrain_subdivisions = _safe_int(params["subdivisions"], 30)
     bpy.ops.cg.eco_generate_terrain()
-    return {"success": True, "results": [f"地形已生成（高度={scene.cg_terrain_hill_height}m）"]}
+    # Move to specified position (operator hard-codes origin)
+    target_x = _safe_float(params.get("x"), 0.0)
+    target_y = _safe_float(params.get("y"), 0.0)
+    if target_x != 0.0 or target_y != 0.0:
+        terrain = bpy.data.objects.get("CG_Terrain")
+        if terrain:
+            terrain.location.x = target_x
+            terrain.location.y = target_y
+    pos_msg = f"，位置({target_x:.0f}, {target_y:.0f})" if (target_x or target_y) else ""
+    return {"success": True, "results": [f"地形已生成（高度={scene.cg_terrain_hill_height}m{pos_msg}）"]}
 
 
 def _handle_generate_lake(params, context):
@@ -418,7 +427,17 @@ def _handle_generate_lake(params, context):
     if "water_color" in params and isinstance(params["water_color"], list):
         scene.cg_lake_water_color = tuple(params["water_color"])
     bpy.ops.cg.eco_generate_lake()
-    return {"success": True, "results": [f"湖泊已生成（大小={scene.cg_lake_size}m）"]}
+    # Move to specified position (operator hard-codes origin)
+    target_x = _safe_float(params.get("x"), 0.0)
+    target_y = _safe_float(params.get("y"), 0.0)
+    if target_x != 0.0 or target_y != 0.0:
+        for obj_name in ("CG_Lake_Block", "CG_Lake"):
+            obj = bpy.data.objects.get(obj_name)
+            if obj:
+                obj.location.x = target_x
+                obj.location.y = target_y
+    pos_msg = f"，位置({target_x:.0f}, {target_y:.0f})" if (target_x or target_y) else ""
+    return {"success": True, "results": [f"湖泊已生成（大小={scene.cg_lake_size}m{pos_msg}）"]}
 
 
 def _handle_generate_river(params, context):
@@ -596,7 +615,14 @@ def _handle_delete_furniture(params, context):
 def _handle_apply_layout_template(params, context):
     scene = context.scene
     if "layout_id" in params:
-        scene.layout_template_id = str(params["layout_id"])
+        lid = str(params["layout_id"])
+        # LLM may send numeric ID (e.g. 0) per FUNCTION_LIST spec;
+        # map to the actual enum key if the value is a digit-only string.
+        if lid.isdigit():
+            keys = list(LAYOUT_TEMPLATE_ASSETS.keys())
+            idx = int(lid) % len(keys)
+            lid = keys[idx]
+        scene.layout_template_id = lid
     if "rows" in params:
         scene.layout_template_rows = _safe_int(params["rows"], 2)
     if "columns" in params:
@@ -763,10 +789,12 @@ FUNCTION_REGISTRY = {
         "name": "generate_terrain",
         "title": "生成山丘地形",
         "category": "environment",
-        "description": "程序化生成有起伏的地形（噪声位移）",
+        "description": "程序化生成有起伏的地形（噪声位移），支持指定位置",
         "risk": "low",
-        "schemaSummary": "hill_height, noise_scale, grid_size",
+        "schemaSummary": "x, y, hill_height, noise_scale, grid_size",
         "parameters": {
+            "x": {"type": "number", "description": "地形中心X坐标（米），默认0", "required": False},
+            "y": {"type": "number", "description": "地形中心Y坐标（米），默认0", "required": False},
             "hill_height": {"type": "number", "description": "山丘高度（米）", "required": False},
             "noise_scale": {"type": "number", "description": "噪声缩放（0.1-5.0）", "required": False},
             "grid_size": {"type": "number", "description": "地形网格大小（米）", "required": False},
@@ -777,10 +805,12 @@ FUNCTION_REGISTRY = {
         "name": "generate_lake",
         "title": "生成湖泊",
         "category": "environment",
-        "description": "生成圆形湖泊水面（含波纹材质）",
+        "description": "生成圆形湖泊水面（含波纹材质），支持指定位置",
         "risk": "low",
-        "schemaSummary": "lake_size, ripple_strength",
+        "schemaSummary": "x, y, lake_size, ripple_strength",
         "parameters": {
+            "x": {"type": "number", "description": "湖泊中心X坐标（米），默认0", "required": False},
+            "y": {"type": "number", "description": "湖泊中心Y坐标（米），默认0", "required": False},
             "lake_size": {"type": "number", "description": "湖泊大小（半径米）", "required": False},
             "ripple_strength": {"type": "number", "description": "波纹强度 (0-1)", "required": False},
         },
