@@ -34,9 +34,20 @@ def boat_animation_handler(scene):
         con.offset_factor = (start + scene.frame_current / speed) % 1.0
 
 
+def _on_building_registry_load(dummy):
+    """Rebuild BuildingRegistry after a .blend file is loaded."""
+    try:
+        from .building_control.building_registry import BuildingRegistry
+        BuildingRegistry.instance().rebuild_from_scene()
+    except Exception:
+        pass
+
+
 def register_handlers():
     bpy.app.handlers.frame_change_pre.append(frame_change_handler)
     bpy.app.handlers.frame_change_post.append(boat_animation_handler)
+    if _on_building_registry_load not in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.append(_on_building_registry_load)
 
 def _generated_group_instances(group_id):
     return [
@@ -90,6 +101,8 @@ def register_handlers():
         bpy.app.handlers.frame_change_pre.append(frame_change_handler)
     if added_3d_group_selection_handler not in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.append(added_3d_group_selection_handler)
+    if _on_building_registry_load not in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.append(_on_building_registry_load)
 
 
 def unregister_handlers():
@@ -99,3 +112,5 @@ def unregister_handlers():
         bpy.app.handlers.frame_change_post.remove(boat_animation_handler)
     if added_3d_group_selection_handler in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(added_3d_group_selection_handler)
+    if _on_building_registry_load in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(_on_building_registry_load)

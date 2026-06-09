@@ -764,6 +764,13 @@ def register_scene_properties():
     )
 
 
+    # Building control
+    bpy.types.Scene.cg_building_counter = bpy.props.IntProperty(
+        name="Building Counter",
+        description="Auto-increment counter for controlled building IDs",
+        default=0, min=0,
+    )
+
     add_custom_properties()
     _add_dynamics_properties()
     _add_layout_properties()
@@ -855,3 +862,6 @@ def unregister_scene_properties():
 
     _remove_dynamics_properties()
     _remove_layout_properties()
+
+    # Building control
+    del bpy.types.Scene.cg_building_counter

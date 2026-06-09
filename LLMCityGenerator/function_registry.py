@@ -6,6 +6,14 @@ to metadata and a handler that executes the operation in Blender.
 
 import bpy
 
+from .building_control.building_api import (
+    _handle_place_building,
+    _handle_move_building,
+    _handle_delete_building,
+    _handle_list_buildings,
+    _handle_query_space,
+)
+
 MODIFIER_NAME = "City_Generator_2.0"
 
 
@@ -588,7 +596,7 @@ def _handle_delete_furniture(params, context):
 def _handle_apply_layout_template(params, context):
     scene = context.scene
     if "layout_id" in params:
-        scene.layout_template_id = _safe_int(params["layout_id"], 0)
+        scene.layout_template_id = str(params["layout_id"])
     if "rows" in params:
         scene.layout_template_rows = _safe_int(params["rows"], 2)
     if "columns" in params:
@@ -948,6 +956,75 @@ FUNCTION_REGISTRY = {
             "asset_id": {"type": "string", "description": "资产: wooden_picnic_table(野餐椅)/small_lpg_tank(小消防罐)/rubber_duck_toy(小黄鸭)", "required": True},
         },
         "handler": _handle_delete_furniture,
+    },
+    # --- Building control ---
+    "place_building": {
+        "name": "place_building",
+        "title": "放置建筑",
+        "category": "layout",
+        "description": "在指定XY坐标放置一栋独立建筑，自动检测重叠",
+        "risk": "medium",
+        "schemaSummary": "x, y, width, depth, height, color",
+        "parameters": {
+            "x": {"type": "number", "description": "建筑底面中心X坐标（米）", "required": True},
+            "y": {"type": "number", "description": "建筑底面中心Y坐标（米）", "required": True},
+            "width": {"type": "number", "description": "建筑宽度X方向（米），默认10", "required": False},
+            "depth": {"type": "number", "description": "建筑深度Y方向（米），默认10", "required": False},
+            "height": {"type": "number", "description": "建筑高度Z方向（米），默认20", "required": False},
+            "color": {"type": "string", "description": "建筑颜色十六进制，如 #CC8844", "required": False},
+        },
+        "handler": _handle_place_building,
+    },
+    "move_building": {
+        "name": "move_building",
+        "title": "移动建筑",
+        "category": "layout",
+        "description": "将已放置的建筑移动到新的XY坐标，自动检测重叠",
+        "risk": "medium",
+        "schemaSummary": "building_id, x, y",
+        "parameters": {
+            "building_id": {"type": "string", "description": "建筑ID，如 B_0001", "required": True},
+            "x": {"type": "number", "description": "目标X坐标（米）", "required": True},
+            "y": {"type": "number", "description": "目标Y坐标（米）", "required": True},
+        },
+        "handler": _handle_move_building,
+    },
+    "delete_building": {
+        "name": "delete_building",
+        "title": "删除建筑",
+        "category": "layout",
+        "description": "删除指定ID的建筑并释放其占用的空间",
+        "risk": "medium",
+        "schemaSummary": "building_id",
+        "parameters": {
+            "building_id": {"type": "string", "description": "要删除的建筑ID，如 B_0001", "required": True},
+        },
+        "handler": _handle_delete_building,
+    },
+    "list_buildings": {
+        "name": "list_buildings",
+        "title": "列出建筑",
+        "category": "layout",
+        "description": "列出当前场景中所有受控建筑的ID、位置和尺寸",
+        "risk": "low",
+        "schemaSummary": "none",
+        "parameters": {},
+        "handler": _handle_list_buildings,
+    },
+    "query_space": {
+        "name": "query_space",
+        "title": "查询空间",
+        "category": "layout",
+        "description": "检查指定矩形区域是否被已有建筑占用",
+        "risk": "low",
+        "schemaSummary": "x, y, width, depth",
+        "parameters": {
+            "x": {"type": "number", "description": "查询区域中心X坐标（米）", "required": True},
+            "y": {"type": "number", "description": "查询区域中心Y坐标（米）", "required": True},
+            "width": {"type": "number", "description": "查询区域宽度（米）", "required": True},
+            "depth": {"type": "number", "description": "查询区域深度（米）", "required": True},
+        },
+        "handler": _handle_query_space,
     },
     # --- Member A: Layout Template ---
     "apply_layout_template": {
