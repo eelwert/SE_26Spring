@@ -406,36 +406,46 @@ def _handle_generate_terrain(params, context):
     if "subdivisions" in params:
         scene.cg_terrain_subdivisions = _safe_int(params["subdivisions"], 30)
     bpy.ops.cg.eco_generate_terrain()
-    # Move to specified position (operator hard-codes origin)
     target_x = _safe_float(params.get("x"), 0.0)
     target_y = _safe_float(params.get("y"), 0.0)
-    if target_x != 0.0 or target_y != 0.0:
-        terrain = bpy.data.objects.get("CG_Terrain")
-        if terrain:
-            terrain.location.x = target_x
-            terrain.location.y = target_y
+    terrain = bpy.data.objects.get("CG_Terrain")
+    if terrain:
+        terrain.location = (target_x, target_y, terrain.location.z)
+        _register_eco_object(terrain, "T", target_x, target_y,
+                             scene.cg_terrain_grid_size, scene.cg_terrain_grid_size,
+                             scene.cg_terrain_hill_height)
     pos_msg = f"，位置({target_x:.0f}, {target_y:.0f})" if (target_x or target_y) else ""
     return {"success": True, "results": [f"地形已生成（高度={scene.cg_terrain_hill_height}m{pos_msg}）"]}
 
 
 def _handle_generate_lake(params, context):
     scene = context.scene
+    if "block_size" in params:
+        scene.cg_lake_block_size = _safe_float(params["block_size"], 30)
     if "lake_size" in params:
-        scene.cg_lake_size = _safe_float(params["lake_size"], 20)
+        scene.cg_lake_size = _safe_float(params["lake_size"], 10)
     if "ripple_strength" in params:
         scene.cg_lake_ripple_strength = _safe_float(params["ripple_strength"], 0.05)
     if "water_color" in params and isinstance(params["water_color"], list):
         scene.cg_lake_water_color = tuple(params["water_color"])
     bpy.ops.cg.eco_generate_lake()
-    # Move to specified position (operator hard-codes origin)
     target_x = _safe_float(params.get("x"), 0.0)
     target_y = _safe_float(params.get("y"), 0.0)
-    if target_x != 0.0 or target_y != 0.0:
-        for obj_name in ("CG_Lake_Block", "CG_Lake"):
-            obj = bpy.data.objects.get(obj_name)
-            if obj:
-                obj.location.x = target_x
-                obj.location.y = target_y
+    block = bpy.data.objects.get("CG_Lake_Block")
+    lake = bpy.data.objects.get("CG_Lake")
+    # Move block first, then align lake's world XY to block's world XY
+    if block:
+        block.location = (target_x, target_y, block.location.z)
+    if lake and block:
+        # Use world-space position to ensure perfect alignment regardless of
+        # any internal offsets introduced by the operator
+        lake_world = block.matrix_world.translation
+        lake.location = (lake_world.x, lake_world.y, lake.location.z)
+    # Register block as a tracked building
+    if block:
+        _register_eco_object(block, "K", target_x, target_y,
+                             scene.cg_lake_block_size, scene.cg_lake_block_size,
+                             scene.cg_lake_size)
     pos_msg = f"，位置({target_x:.0f}, {target_y:.0f})" if (target_x or target_y) else ""
     return {"success": True, "results": [f"湖泊已生成（大小={scene.cg_lake_size}m{pos_msg}）"]}
 
@@ -634,6 +644,38 @@ def _handle_apply_layout_template(params, context):
         return {"success": False, "results": [f"布局模板失败: {str(e)}"]}
 
 
+def _register_eco_object(obj, prefix, x, y, width, depth, height):
+    """Tag an eco-generated object and register it in BuildingRegistry."""
+    try:
+        from .building_control.building_registry import BuildingRegistry
+    except Exception:
+        return
+    if obj.get("cg.is_controlled_building", False):
+        return  # already registered
+    building_id = _eco_next_id(prefix)
+    obj["cg.is_controlled_building"] = True
+    obj["cg.building_id"] = building_id
+    obj["cg.building_width"] = float(width)
+    obj["cg.building_depth"] = float(depth)
+    obj["cg.building_height"] = float(height)
+    obj["cg.building_color"] = ""
+    BuildingRegistry.instance().register(
+        building_id, obj.name, x, y, width, depth, height, "",
+    )
+
+
+def _eco_next_id(prefix):
+    """Generate a prefixed building ID (T=terrain, K=lake, L=layout)."""
+    scene = bpy.context.scene
+    try:
+        counter = scene.cg_building_counter
+    except (AttributeError, TypeError):
+        counter = 0
+    counter += 1
+    scene.cg_building_counter = counter
+    return f"{prefix}_{counter:04d}"
+
+
 def _register_layout_blocks_in_registry():
     """Scan for layout template blocks and register them in BuildingRegistry."""
     try:
@@ -660,7 +702,7 @@ def _register_layout_blocks_in_registry():
             d = float(layout.get("block_depth", 56.98))
 
         # Generate building ID and tag the object
-        building_id = _layout_next_id()
+        building_id = _eco_next_id("L")
         obj["cg.is_controlled_building"] = True
         obj["cg.building_id"] = building_id
         obj["cg.building_width"] = w
@@ -682,16 +724,6 @@ def _register_layout_blocks_in_registry():
         )
 
 
-def _layout_next_id():
-    """Like _next_id but prefixed L_ for layout blocks."""
-    scene = bpy.context.scene
-    try:
-        counter = scene.cg_building_counter
-    except (AttributeError, TypeError):
-        counter = 0
-    counter += 1
-    scene.cg_building_counter = counter
-    return f"L_{counter:04d}"
 
 
 # --- Registry ---
@@ -865,13 +897,14 @@ FUNCTION_REGISTRY = {
         "name": "generate_lake",
         "title": "生成湖泊",
         "category": "environment",
-        "description": "生成圆形湖泊水面（含波纹材质），支持指定位置",
+        "description": "生成圆形湖泊水面（含波纹材质），支持指定位置。湖面半径不应超过总大小的一半",
         "risk": "low",
-        "schemaSummary": "x, y, lake_size, ripple_strength",
+        "schemaSummary": "x, y, block_size, lake_size, ripple_strength",
         "parameters": {
             "x": {"type": "number", "description": "湖泊中心X坐标（米），默认0", "required": False},
             "y": {"type": "number", "description": "湖泊中心Y坐标（米），默认0", "required": False},
-            "lake_size": {"type": "number", "description": "湖泊大小（半径米）", "required": False},
+            "block_size": {"type": "number", "description": "公园地块总大小（边长米），默认30", "required": False},
+            "lake_size": {"type": "number", "description": "湖面半径（米），默认10，不应超过block_size的一半", "required": False},
             "ripple_strength": {"type": "number", "description": "波纹强度 (0-1)", "required": False},
         },
         "handler": _handle_generate_lake,

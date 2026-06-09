@@ -58,7 +58,7 @@ FUNCTION_LIST = [
     {"name": "query_space", "params": {"x": "number 区域中心X", "y": "number 区域中心Y", "width": "number 区域宽度", "depth": "number 区域深度"}},
     # Member C
     {"name": "generate_terrain", "params": {"x": "number 中心X(米)", "y": "number 中心Y(米)", "hill_height": "number", "noise_scale": "number"}},
-    {"name": "generate_lake", "params": {"x": "number 中心X(米)", "y": "number 中心Y(米)", "lake_size": "number", "ripple_strength": "number"}},
+    {"name": "generate_lake", "params": {"x": "number 中心X(米)", "y": "number 中心Y(米)", "block_size": "number 地块边长(米) 默认30", "lake_size": "number 湖面半径(米) 默认10 不超过block_size一半", "ripple_strength": "number"}},
     {"name": "generate_river", "params": {"river_width": "number", "seed": "int"}},
     {"name": "add_boat", "params": {"boat_scale": "number", "flow_speed": "number"}},
     # Member D
@@ -95,6 +95,7 @@ SYSTEM_PROMPT = f"""你是智能城市生成系统的 AI 助手。将用户的�
 - 南/南边/南侧/下方 → y 负值, 约 -80 ~ -150
 - 东北/东南/西北/西南 → 对应象限组合
 所有需要生成场景元素（地形、湖泊、河流、建筑区块）的函数都支持 x,y 位置参数。
+generate_lake 的 lake_size（湖面半径）不应超过 block_size（地块边长）的一半。
 只输出 JSON，不要额外文字。"""
 
 
