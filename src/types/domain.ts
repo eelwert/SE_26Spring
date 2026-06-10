@@ -46,6 +46,19 @@ export interface LoginRequest {
   role?: RoleCode;
 }
 
+export interface UpdateUserRoleRequest {
+  role: RoleCode;
+}
+
+export interface UpdateUserPermissionsRequest {
+  permissions: PermissionCode[];
+}
+
+export interface ReviewPluginRequest {
+  status: PluginReviewStatus;
+  note: string;
+}
+
 export interface ApiEnvelope<T> {
   traceId: string;
   data: T;
@@ -147,6 +160,21 @@ export interface PluginFunction {
   risk: 'low' | 'medium' | 'high';
   schemaSummary: string;
   averageMs: number;
+}
+
+export type PluginReviewStatus = 'pending' | 'approved' | 'rejected';
+
+export interface PluginReview {
+  id: string;
+  functionName: string;
+  title: string;
+  risk: 'low' | 'medium' | 'high';
+  status: PluginReviewStatus;
+  requestedBy: string;
+  reviewedBy: string;
+  note: string;
+  createdAt: string;
+  reviewedAt?: string | null;
 }
 
 export interface Task {

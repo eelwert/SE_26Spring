@@ -8,7 +8,9 @@ import type {
   LoginRequest,
   MultimodalCommand,
   PluginFunction,
+  PluginReview,
   Project,
+  ReviewPluginRequest,
   ReplaceAssetRequest,
   RuntimeSetting,
   Scene,
@@ -17,7 +19,10 @@ import type {
   StartSimulationRequest,
   SubmitCommandRequest,
   Task,
+  UpdateUserPermissionsRequest,
+  UpdateUserRoleRequest,
   UpdateSceneTemplateRequest,
+  User,
   VersionSnapshot,
   WorkspaceBundle,
 } from '../../types/domain';
@@ -64,7 +69,9 @@ const request = async <T>(path: string, options?: RequestInit): Promise<ApiEnvel
 const get = <T>(path: string) => request<T>(path);
 const post = <T>(path: string, data?: unknown) =>
   request<T>(path, { method: 'POST', body: data ? JSON.stringify(data) : undefined });
-const patch = <T>(path: string) => request<T>(path, { method: 'PATCH' });
+const patch = <T>(path: string, data?: unknown) =>
+  request<T>(path, { method: 'PATCH', body: data ? JSON.stringify(data) : undefined });
+const deleteRequest = <T>(path: string) => request<T>(path, { method: 'DELETE' });
 
 class RealSmartCityApi {
   // Auth
@@ -79,6 +86,31 @@ class RealSmartCityApi {
 
   async getDashboardSummary(): Promise<ApiEnvelope<DashboardSummary>> {
     return get<DashboardSummary>('/dashboard/summary');
+  }
+
+  // Admin
+  async getAdminUsers(): Promise<ApiEnvelope<User[]>> {
+    return get<User[]>('/admin/users');
+  }
+
+  async updateUserRole(userId: string, req: UpdateUserRoleRequest, actor: string): Promise<ApiEnvelope<User>> {
+    return patch<User>(`/admin/users/${encodeURIComponent(userId)}/role?actor=${encodeURIComponent(actor)}`, req);
+  }
+
+  async updateUserPermissions(userId: string, req: UpdateUserPermissionsRequest, actor: string): Promise<ApiEnvelope<User>> {
+    return patch<User>(`/admin/users/${encodeURIComponent(userId)}/permissions?actor=${encodeURIComponent(actor)}`, req);
+  }
+
+  async deleteUser(userId: string, actor: string): Promise<ApiEnvelope<{ deletedUserId: string }>> {
+    return deleteRequest<{ deletedUserId: string }>(`/admin/users/${encodeURIComponent(userId)}?actor=${encodeURIComponent(actor)}`);
+  }
+
+  async getPluginReviews(): Promise<ApiEnvelope<PluginReview[]>> {
+    return get<PluginReview[]>('/admin/plugin-reviews');
+  }
+
+  async reviewPlugin(reviewId: string, req: ReviewPluginRequest, actor: string): Promise<ApiEnvelope<PluginReview>> {
+    return patch<PluginReview>(`/admin/plugin-reviews/${encodeURIComponent(reviewId)}?actor=${encodeURIComponent(actor)}`, req);
   }
 
   // Projects

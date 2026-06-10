@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Brush, FileImage, Map, PackagePlus, SlidersHorizontal, SquarePen } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Brush, FileImage, Map, PackagePlus, PlugZap, SlidersHorizontal, SquarePen, X } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { BACKEND_ORIGIN } from '../services/api/config';
 import { Button, EmptyState, Field, MetricCard, Panel, SectionHeader, StatusBadge } from '../components/ui';
 
 const roadTextureOptions = [
@@ -16,6 +18,7 @@ const furnitureAssets = [
 ];
 
 export function ModelerPortalPage() {
+  const navigate = useNavigate();
   const {
     selectedProjectId,
     selectedSceneId,
@@ -37,6 +40,7 @@ export function ModelerPortalPage() {
   const [sketchName, setSketchName] = useState('road-sketch.png');
   const [sketchBase64, setSketchBase64] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [isBlenderGuideOpen, setBlenderGuideOpen] = useState(false);
 
   const sceneTasks = useMemo(
     () => tasks.filter((task) => !selectedSceneId || task.sceneId === selectedSceneId).slice(0, 5),
@@ -114,7 +118,65 @@ export function ModelerPortalPage() {
           <h1>场景建模师门户</h1>
           <p>{selectedProject && selectedScene ? `${selectedProject.name} / ${selectedScene.name}` : '选择项目后配置 Blender 城市场景。'}</p>
         </div>
+        <div className="hero-actions">
+          <Button onClick={() => setBlenderGuideOpen(true)}>
+            <PlugZap size={16} />
+            进入 Blender 插件系统
+          </Button>
+        </div>
       </section>
+
+      {isBlenderGuideOpen ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal-panel blender-guide" role="dialog" aria-modal="true" aria-labelledby="blender-guide-title">
+            <div className="modal-head">
+              <div>
+                <span className="eyebrow">Blender Plugin</span>
+                <h2 id="blender-guide-title">进入 Blender 插件系统</h2>
+              </div>
+              <button type="button" className="modal-close" onClick={() => setBlenderGuideOpen(false)} aria-label="关闭 Blender 插件说明">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="notice-row">
+              <PlugZap size={18} />
+              <span>主系统已授权，Blender 插件将通过任务轮询获取待执行函数。</span>
+            </div>
+            <div className="scene-context-grid guide-grid">
+              <div>
+                <span>当前项目</span>
+                <strong>{selectedProject?.name ?? '未选择项目'}</strong>
+              </div>
+              <div>
+                <span>当前场景</span>
+                <strong>{selectedScene?.name ?? '未选择场景'}</strong>
+              </div>
+              <div>
+                <span>后端服务</span>
+                <strong>{BACKEND_ORIGIN}</strong>
+              </div>
+              <div>
+                <span>插件入口</span>
+                <strong>View3D &gt; Sidebar &gt; LLM City Generator</strong>
+              </div>
+              <div>
+                <span>任务轮询</span>
+                <strong>GET /api/tasks/pending</strong>
+              </div>
+              <div>
+                <span>执行回执</span>
+                <strong>POST /api/tasks/:id/result</strong>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <Button variant="secondary" onClick={() => navigate('/tasks')}>
+                查看任务队列
+              </Button>
+              <Button onClick={() => setBlenderGuideOpen(false)}>我知道了</Button>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       <div className="metrics-grid">
         <MetricCard label="当前对象" value={selectedScene?.objectCount.toLocaleString() ?? 0} meta="Blender 场景对象" />

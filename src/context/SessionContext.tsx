@@ -13,8 +13,26 @@ interface SessionContextValue {
 }
 
 const STORAGE_KEY = 'smart-city-session';
+const roleCodes: RoleCode[] = ['modeler', 'analyst', 'admin'];
 
 const SessionContext = createContext<SessionContextValue | null>(null);
+
+const isValidSession = (value: unknown): value is Session => {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<Session>;
+  if (typeof candidate.token !== 'string' || typeof candidate.expiresAt !== 'string') return false;
+  if (!candidate.user || typeof candidate.user !== 'object') return false;
+  const user = candidate.user as Partial<Session['user']>;
+  return (
+    typeof user.id === 'string' &&
+    typeof user.name === 'string' &&
+    typeof user.email === 'string' &&
+    typeof user.department === 'string' &&
+    roleCodes.includes(user.role as RoleCode) &&
+    Array.isArray(user.permissions) &&
+    user.permissions.every((permission) => typeof permission === 'string')
+  );
+};
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -24,8 +42,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       try {
-        const parsed = JSON.parse(raw) as Session;
-        if (new Date(parsed.expiresAt).getTime() > Date.now()) {
+        const parsed = JSON.parse(raw) as unknown;
+        if (isValidSession(parsed) && new Date(parsed.expiresAt).getTime() > Date.now()) {
           setSession(parsed);
         } else {
           localStorage.removeItem(STORAGE_KEY);

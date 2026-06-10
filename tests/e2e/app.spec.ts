@@ -167,8 +167,24 @@ const makeUser = (role: RoleCode) => ({
   permissions: permissionsByRole[role],
 });
 
+const demoUsers = (['modeler', 'analyst', 'admin'] as RoleCode[]).map(makeUser);
+
+const pluginReviews = [
+  {
+    id: 'review-dispatch-blender-job',
+    functionName: 'dispatch_blender_job',
+    title: 'Blender 插件下发',
+    risk: 'high',
+    status: 'pending',
+    requestedBy: '插件系统',
+    reviewedBy: '',
+    note: '',
+    createdAt: '2026-06-10T10:00:00+08:00',
+  },
+];
+
 async function mockBackendApi(page: Page) {
-  await page.route('**/api/**', async (route) => {
+  await page.route('http://127.0.0.1:18000/api/**', async (route) => {
     const url = new URL(route.request().url());
 
     if (url.pathname === '/api/auth/login') {
@@ -206,6 +222,16 @@ async function mockBackendApi(page: Page) {
           },
         },
       });
+      return;
+    }
+
+    if (url.pathname === '/api/admin/users') {
+      await route.fulfill({ json: { traceId: 'trace-users', data: demoUsers } });
+      return;
+    }
+
+    if (url.pathname === '/api/admin/plugin-reviews') {
+      await route.fulfill({ json: { traceId: 'trace-plugin-reviews', data: pluginReviews } });
       return;
     }
 
@@ -252,6 +278,7 @@ test('logs in as admin and opens the admin portal', async ({ page }) => {
   await loginAs(page, 'admin');
 
   await expect(page.getByRole('heading', { name: '系统管理员门户' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '用户权限分配' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '审核插件' })).toBeVisible();
 });
 
@@ -260,4 +287,32 @@ test('redirects modeler away from admin settings route', async ({ page }) => {
   await page.goto('/settings');
 
   await expect(page.getByRole('heading', { name: '场景建模师门户' })).toBeVisible();
+});
+
+test('redirects modeler away from admin route', async ({ page }) => {
+  await loginAs(page, 'modeler');
+  await page.goto('/admin');
+
+  await expect(page.getByRole('heading', { name: '场景建模师门户' })).toBeVisible();
+  await expect(page.getByText('删除用户')).toHaveCount(0);
+});
+
+test('modeler can open the Blender plugin entry dialog', async ({ page }) => {
+  await loginAs(page, 'modeler');
+
+  await page.getByRole('button', { name: /进入 Blender 插件系统/ }).click();
+
+  await expect(page.getByRole('dialog', { name: /进入 Blender 插件系统/ })).toBeVisible();
+  await expect(page.getByText(/View3D > Sidebar > LLM City Generator/)).toBeVisible();
+  await expect(page.getByText(/主系统已授权/)).toBeVisible();
+});
+
+test('multimodal workstation renders the input and DAG areas', async ({ page }) => {
+  await loginAs(page, 'modeler');
+  await page.goto('/multimodal');
+
+  await expect(page.getByRole('heading', { name: '多模态智能交互' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '输入工作区' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '函数 DAG 计划' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /解析指令/ })).toBeVisible();
 });

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 import { BrainCircuit, Check, FileImage, MessageSquareText, Play, RefreshCw, Send, SquarePen } from 'lucide-react';
 import { useWorkspace } from '../context/WorkspaceContext';
 import type { Modality } from '../types/domain';
@@ -36,11 +36,6 @@ export function MultimodalPage() {
   const [isDispatching, setIsDispatching] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [isRefreshingContext, setIsRefreshingContext] = useState(false);
-
-  // Refresh building context on mount so LLM has scene info
-  useEffect(() => {
-    refreshSceneContext();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -123,15 +118,35 @@ export function MultimodalPage() {
   };
 
   return (
-    <div className="page-stack">
-      <SectionHeader title="多模态智能交互" description="文本、草图、截图输入会先解析为意图与槽位，再生成可审计函数 DAG。" />
+    <div className="page-stack multimodal-workbench">
+      <section className="workbench-hero">
+        <div>
+          <span className="eyebrow">Multimodal Control</span>
+          <h1>多模态智能交互</h1>
+          <p>文本、草图、截图输入会先解析为意图与槽位，再生成可审计函数 DAG。</p>
+        </div>
+        <div className="workbench-summary">
+          <div>
+            <span>历史指令</span>
+            <strong>{commands.length}</strong>
+          </div>
+          <div>
+            <span>关联任务</span>
+            <strong>{commandTasks.length}</strong>
+          </div>
+          <div>
+            <span>场景上下文</span>
+            <strong>{buildingsCache ? '已缓存' : '待刷新'}</strong>
+          </div>
+        </div>
+      </section>
 
-      <div className="multimodal-grid">
-        <Panel>
-          <SectionHeader title="指令输入" />
+      <div className="multimodal-console">
+        <Panel className="mmi-input-panel">
+          <SectionHeader title="输入工作区" description="选择通道、输入自然语言，并按需附带建筑上下文。" />
           <form className="mmi-form" onSubmit={(event) => void handleSubmit(event)}>
             {localError ? <div className="form-error">{localError}</div> : null}
-            <div className="preset-list">
+            <div className="preset-list mmi-presets">
               {promptPresets.map((preset) => (
                 <button key={preset} type="button" onClick={() => setText(preset)}>
                   {preset}
@@ -157,12 +172,11 @@ export function MultimodalPage() {
             {showFileUpload ? (
               <Field label={isSketch ? '上传道路草图' : '上传城市场景截图'}>
                 <input type="file" accept="image/*" onChange={handleFileChange} />
-                {imageFileName ? <small style={{ color: '#4c1' }}>已选择: {imageFileName}</small> : null}
+                {imageFileName ? <small className="file-picked">已选择: {imageFileName}</small> : null}
               </Field>
             ) : null}
-            {/* Building context panel */}
             <Field label="场景建筑上下文">
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div className="context-toolbar">
                 <Button
                   size="sm"
                   variant="ghost"
@@ -176,7 +190,7 @@ export function MultimodalPage() {
                   <RefreshCw size={14} />
                   刷新建筑列表
                 </Button>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: 'pointer' }}>
+                <label className="inline-check">
                   <input
                     type="checkbox"
                     checked={includeContext}
@@ -186,15 +200,11 @@ export function MultimodalPage() {
                 </label>
               </div>
               {buildingsCache ? (
-                <pre style={{
-                  marginTop: 8, padding: 10, background: '#111', color: '#4c1',
-                  borderRadius: 6, fontSize: 12, maxHeight: 180, overflowY: 'auto',
-                  whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-                }}>
+                <pre className="context-preview">
                   {buildingsCache}
                 </pre>
               ) : (
-                <div style={{ marginTop: 8, padding: 10, background: '#1a1a1a', borderRadius: 6, fontSize: 12, color: '#888' }}>
+                <div className="context-preview context-preview-empty">
                   暂未获取到建筑列表。请点击"刷新建筑列表"按钮（需 Blender 后端在线）。
                 </div>
               )}
@@ -209,7 +219,7 @@ export function MultimodalPage() {
           </form>
         </Panel>
 
-        <Panel>
+        <Panel className="mmi-result-panel">
           <SectionHeader title="意图与槽位" />
           {activeCommand ? (
             <div className="intent-panel">
@@ -234,60 +244,45 @@ export function MultimodalPage() {
           ) : (
             <EmptyState title="等待指令" description="提交文本、草图或截图后会生成结构化意图。" />
           )}
-        </Panel>
-      </div>
 
-      <Panel>
-        <SectionHeader
-          title="函数 DAG 计划"
-          action={
-            activeCommand ? (
-              <Button
-                size="sm"
-                onClick={() => void handleDispatchPlan(activeCommand.id)}
-                isLoading={isDispatching === activeCommand.id}
-                disabled={activeCommand.needsClarification}
-              >
-                <Play size={14} />
-                自动下发
-              </Button>
-            ) : null
-          }
-        />
-        {activeCommand ? (
-          <div className="plan-board">
-            {activeCommand.plan.map((node, index) => (
-              <div key={node.id} className="plan-node">
-                <div className="plan-index">{index + 1}</div>
-                <div>
-                  <strong>{node.title}</strong>
-                  <span>{node.funcName}</span>
+          <div className="result-divider" />
+
+          <SectionHeader
+            title="函数 DAG 计划"
+            action={
+              activeCommand ? (
+                <Button
+                  size="sm"
+                  onClick={() => void handleDispatchPlan(activeCommand.id)}
+                  isLoading={isDispatching === activeCommand.id}
+                  disabled={activeCommand.needsClarification}
+                >
+                  <Play size={14} />
+                  自动下发
+                </Button>
+              ) : null
+            }
+          />
+          {activeCommand ? (
+            <div className="plan-board compact-plan-board">
+              {activeCommand.plan.map((node, index) => (
+                <div key={node.id} className="plan-node">
+                  <div className="plan-index">{index + 1}</div>
+                  <div>
+                    <strong>{node.title}</strong>
+                    <span>{node.funcName}</span>
+                  </div>
+                  <StatusBadge status={node.status} />
+                  <code>{JSON.stringify(node.params)}</code>
                 </div>
-                <StatusBadge status={node.status} />
-                <code>{JSON.stringify(node.params)}</code>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <EmptyState title="暂无计划" description="系统会把输入转成白名单函数调用序列。" />
-        )}
-      </Panel>
+              ))}
+            </div>
+          ) : (
+            <EmptyState title="暂无计划" description="系统会把输入转成白名单函数调用序列。" />
+          )}
 
-      <div className="two-column">
-        <Panel>
-          <SectionHeader title="编排链路" />
-          <div className="pipeline">
-            {['多模态编码', '意图分类', '槽位填充', '函数检索', 'DAG 编排', '参数校验', '任务下发'].map((item, index) => (
-              <div key={item} className="pipeline-step">
-                <span>{index + 1}</span>
-                <strong>{item}</strong>
-                <Check size={16} />
-              </div>
-            ))}
-          </div>
-        </Panel>
+          <div className="result-divider" />
 
-        <Panel>
           <SectionHeader title="关联任务" />
           {commandTasks.length ? (
             <div className="table-list">
@@ -311,23 +306,42 @@ export function MultimodalPage() {
         </Panel>
       </div>
 
-      <Panel>
-        <SectionHeader title="历史指令" />
-        <div className="command-history">
-          {commands.map((command) => (
-            <div key={command.id} className="command-item">
-              <BrainCircuit size={18} />
-              <div>
-                <strong>{command.rawInput}</strong>
-                <span>
-                  {command.intentTag} / {command.modality.join('+')}
-                </span>
+      <div className="two-column">
+        <Panel>
+          <SectionHeader title="编排链路" />
+          <div className="pipeline">
+            {['多模态编码', '意图分类', '槽位填充', '函数检索', 'DAG 编排', '参数校验', '任务下发'].map((item, index) => (
+              <div key={item} className="pipeline-step">
+                <span>{index + 1}</span>
+                <strong>{item}</strong>
+                <Check size={16} />
               </div>
-              <StatusBadge status={command.needsClarification ? 'warning' : 'success'} />
+            ))}
+          </div>
+        </Panel>
+
+        <Panel>
+          <SectionHeader title="历史指令" />
+          {commands.length ? (
+            <div className="command-history">
+              {commands.map((command) => (
+                <div key={command.id} className="command-item">
+                  <BrainCircuit size={18} />
+                  <div>
+                    <strong>{command.rawInput}</strong>
+                    <span>
+                      {command.intentTag} / {command.modality.join('+')}
+                    </span>
+                  </div>
+                  <StatusBadge status={command.needsClarification ? 'warning' : 'success'} />
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </Panel>
+          ) : (
+            <EmptyState title="暂无历史" description="解析后的指令会保留在这里，方便追溯。" />
+          )}
+        </Panel>
+      </div>
     </div>
   );
 }

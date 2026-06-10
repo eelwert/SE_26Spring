@@ -6,6 +6,7 @@ import { useWorkspace } from '../context/WorkspaceContext';
 import { BACKEND_ORIGIN, BACKEND_START_COMMAND } from '../services/api/config';
 import { roleLabels, type PermissionCode, type RoleCode } from '../types/domain';
 import { IconButton, InlineError, LoadingBlock, StatusBadge } from './ui';
+import { getLandingPathForRole } from '../utils/roleRoutes';
 
 interface NavItem {
   path: string;
@@ -137,7 +138,14 @@ export function AppLayout() {
                 <strong>{session?.user.name}</strong>
                 <span>{session ? roleLabels[session.user.role] : ''}</span>
               </div>
-              <select value={session?.user.role} onChange={(event) => void switchDemoRole(event.target.value as never)} title="切换演示角色">
+              <select
+                value={session?.user.role}
+                onChange={(event) => {
+                  const nextRole = event.target.value as RoleCode;
+                  void switchDemoRole(nextRole).then(() => navigate(getLandingPathForRole(nextRole)));
+                }}
+                title="切换演示角色"
+              >
                 <option value="modeler">建模师</option>
                 <option value="analyst">分析师</option>
                 <option value="admin">管理员</option>
@@ -155,27 +163,26 @@ export function AppLayout() {
           </div>
         </header>
 
+        <div className="workspace-ribbon">
+          <span>
+            <ShieldCheck size={16} />
+            RBAC 已装配：{session ? roleLabels[session.user.role] : '未登录'}
+          </span>
+          <span>
+            <ServerCog size={16} />
+            后端服务：{BACKEND_ORIGIN}
+          </span>
+          <span className={isSettingsRoute ? 'ribbon-focus' : ''} title={BACKEND_START_COMMAND}>
+            默认连接真实后端
+          </span>
+        </div>
+
         <main className="content">
           {error ? <InlineError message={error} onDismiss={clearError} /> : null}
           {isLoading && projects.length === 0 ? (
             <LoadingBlock label="正在从后端加载工作区数据" />
           ) : (
-            <>
-              <div className="workspace-ribbon">
-                <span>
-                  <ShieldCheck size={16} />
-                  RBAC 已装配：{session ? roleLabels[session.user.role] : '未登录'}
-                </span>
-                <span>
-                  <ServerCog size={16} />
-                  后端服务：{BACKEND_ORIGIN}
-                </span>
-                <span className={isSettingsRoute ? 'ribbon-focus' : ''} title={BACKEND_START_COMMAND}>
-                  默认连接真实后端
-                </span>
-              </div>
-              <Outlet />
-            </>
+            <Outlet />
           )}
         </main>
       </div>

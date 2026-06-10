@@ -4,20 +4,26 @@ import time
 import uuid
 
 from .schemas import (
-    Asset, AuditLog, MultimodalCommand, PluginFunction, Project,
+    Asset, AuditLog, MultimodalCommand, PluginFunction, PluginReview, Project,
     RuntimeSetting, Scene, SceneTemplate, SimulationJob,
     SystemHealthItem, Task, User, VersionSnapshot, TaskStatus,
 )
 
 DEMO_PASSWORD = "demo1234"
 
+ROLE_DEFAULT_PERMISSIONS: dict[str, list[str]] = {
+    "modeler": ["dashboard:view", "project:read", "project:write", "asset:replace", "layout:edit", "task:dispatch", "multimodal:execute", "audit:read"],
+    "analyst": ["dashboard:view", "project:read", "task:dispatch", "multimodal:execute", "simulation:run", "audit:read"],
+    "admin": ["dashboard:view", "project:read", "project:write", "asset:replace", "layout:edit", "task:dispatch", "multimodal:execute", "simulation:run", "audit:read", "version:rollback", "settings:write"],
+}
+
 demo_users: list[User] = [
     User(id="usr-modeler", name="林知远", email="modeler@nku.city", role="modeler",
-         department="场景建模组", permissions=["dashboard:view","project:read","project:write","asset:replace","layout:edit","task:dispatch","multimodal:execute","audit:read"]),
+         department="场景建模组", permissions=ROLE_DEFAULT_PERMISSIONS["modeler"]),
     User(id="usr-analyst", name="沈迭青", email="analyst@nku.city", role="analyst",
-         department="城市仿真分析组", permissions=["dashboard:view","project:read","task:dispatch","multimodal:execute","simulation:run","audit:read"]),
+         department="城市仿真分析组", permissions=ROLE_DEFAULT_PERMISSIONS["analyst"]),
     User(id="usr-admin", name="陈明策", email="admin@nku.city", role="admin",
-         department="平台治理与运维", permissions=["dashboard:view","project:read","project:write","asset:replace","layout:edit","task:dispatch","multimodal:execute","simulation:run","audit:read","version:rollback","settings:write"]),
+         department="平台治理与运维", permissions=ROLE_DEFAULT_PERMISSIONS["admin"]),
 ]
 
 projects: list[Project] = [
@@ -158,6 +164,20 @@ functions: list[PluginFunction] = [
     PluginFunction(name="sketch_layout", title="草图提取布局", category="layout",
                    description="从草图图像提取道路拓扑", enabled=True, risk="medium",
                    schemaSummary="image_path, threshold", averageMs=1500),
+]
+
+plugin_reviews: list[PluginReview] = [
+    PluginReview(
+        id=f"review-{func.name.replace('_', '-')}",
+        functionName=func.name,
+        title=func.title,
+        risk=func.risk,
+        status="pending",
+        requestedBy="插件白名单同步",
+        createdAt="2026-06-10T10:00:00+08:00",
+    )
+    for func in functions
+    if func.risk in {"medium", "high"}
 ]
 
 tasks: list[Task] = [

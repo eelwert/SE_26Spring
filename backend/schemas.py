@@ -56,6 +56,19 @@ class LoginRequest(BaseModel):
     role: Optional[RoleCode] = None
 
 
+class UpdateUserRoleRequest(BaseModel):
+    role: RoleCode
+
+
+class UpdateUserPermissionsRequest(BaseModel):
+    permissions: list[PermissionCode]
+
+
+class ReviewPluginRequest(BaseModel):
+    status: str
+    note: str = ""
+
+
 class Project(BaseModel):
     id: str
     name: str
@@ -127,6 +140,19 @@ class PluginFunction(BaseModel):
     risk: str  # "low" | "medium" | "high"
     schemaSummary: str
     averageMs: int
+
+
+class PluginReview(BaseModel):
+    id: str
+    functionName: str
+    title: str
+    risk: str  # "low" | "medium" | "high"
+    status: str  # "pending" | "approved" | "rejected"
+    requestedBy: str
+    reviewedBy: str = ""
+    note: str = ""
+    createdAt: str
+    reviewedAt: Optional[str] = None
 
 
 class Task(BaseModel):

@@ -55,6 +55,22 @@ const makeUser = (role: RoleCode): User => ({
   permissions: permissionsByRole[role],
 });
 
+const demoUsers = (['modeler', 'analyst', 'admin'] as RoleCode[]).map(makeUser);
+
+const pluginReviews = [
+  {
+    id: 'review-dispatch-blender-job',
+    functionName: 'dispatch_blender_job',
+    title: 'Blender 插件下发',
+    risk: 'high' as const,
+    status: 'pending' as const,
+    requestedBy: '插件系统',
+    reviewedBy: '',
+    note: '',
+    createdAt: '2026-06-10T10:00:00+08:00',
+  },
+];
+
 const workspaceBundle: WorkspaceBundle = {
   projects: [
     {
@@ -196,6 +212,8 @@ const apiMock = vi.hoisted(() => ({
   login: vi.fn(),
   getWorkspaceBundle: vi.fn(),
   getDashboardSummary: vi.fn(),
+  getAdminUsers: vi.fn(),
+  getPluginReviews: vi.fn(),
 }));
 
 vi.mock('../../src/services/api', () => ({ api: apiMock }));
@@ -252,6 +270,8 @@ describe('App', () => {
         pluginHealthRate: 99,
       },
     });
+    apiMock.getAdminUsers.mockResolvedValue({ traceId: 'trace-users', data: demoUsers });
+    apiMock.getPluginReviews.mockResolvedValue({ traceId: 'trace-plugin-reviews', data: pluginReviews });
     vi.spyOn(window, 'fetch').mockResolvedValue({
       json: async () => ({ data: workspaceBundle }),
     } as Response);
@@ -289,6 +309,8 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: '系统管理员门户' })).toBeInTheDocument();
     expect(screen.getByText('管理用户、审核插件、维护白名单与审计证据链。')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '用户权限分配' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '审核插件' })).toBeInTheDocument();
   });
 
   it('redirects a modeler away from admin-only settings', async () => {
@@ -303,5 +325,54 @@ describe('App', () => {
 
     await waitFor(() => expect(screen.queryByRole('heading', { name: '登录工作台' })).not.toBeInTheDocument());
     expect(await screen.findByRole('heading', { name: '场景建模师门户' })).toBeInTheDocument();
+  });
+
+  it('redirects a modeler away from the admin route and hides admin-only actions', async () => {
+    const session = {
+      token: 'jwt-modeler-test',
+      user: makeUser('modeler'),
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    };
+    localStorage.setItem('smart-city-session', JSON.stringify(session));
+
+    renderApp('/admin');
+
+    expect(await screen.findByRole('heading', { name: '场景建模师门户' })).toBeInTheDocument();
+    expect(screen.queryByText('删除用户')).not.toBeInTheDocument();
+    expect(screen.queryByText('审核通过')).not.toBeInTheDocument();
+    expect(screen.queryByText('审核拒绝')).not.toBeInTheDocument();
+  });
+
+  it('clears an invalid stored session and returns to login', async () => {
+    localStorage.setItem(
+      'smart-city-session',
+      JSON.stringify({
+        token: 'jwt-invalid-test',
+        user: {
+          id: 'usr-invalid',
+          name: '非法角色',
+          email: 'invalid@nku.city',
+          role: 'owner',
+          department: '测试',
+        },
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      }),
+    );
+
+    renderApp('/admin');
+
+    expect(await screen.findByRole('heading', { name: '登录工作台' })).toBeInTheDocument();
+    expect(localStorage.getItem('smart-city-session')).toBeNull();
+  });
+
+  it('opens the Blender plugin entry dialog from the modeler portal', async () => {
+    const user = userEvent.setup();
+    await loginAs('modeler');
+
+    await user.click(await screen.findByRole('button', { name: /进入 Blender 插件系统/ }));
+
+    expect(await screen.findByRole('dialog', { name: /进入 Blender 插件系统/ })).toBeInTheDocument();
+    expect(screen.getByText(/View3D > Sidebar > LLM City Generator/)).toBeInTheDocument();
+    expect(screen.getByText(/主系统已授权/)).toBeInTheDocument();
   });
 });

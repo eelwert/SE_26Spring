@@ -618,7 +618,7 @@ a {
   min-width: 0;
   height: 100vh;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   overflow: hidden;
 }
 
@@ -703,7 +703,8 @@ a {
   min-height: 38px;
   border: 1px solid var(--line);
   background: var(--surface);
-  border-radius: 8px;
+  border-width: 0 0 1px;
+  border-radius: 0;
   padding: 8px 12px;
   color: var(--muted);
   font-size: 13px;
@@ -2110,12 +2111,6 @@ code {
   justify-content: flex-end;
 }
 
-.workspace-ribbon {
-  position: sticky;
-  top: 0;
-  z-index: 8;
-}
-
 .table-row {
   grid-template-columns: minmax(240px, 1fr) auto minmax(160px, 240px);
   padding: 10px 12px;
@@ -2179,11 +2174,256 @@ code {
   padding: 18px;
 }
 
+.workbench-hero {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.58fr);
+  gap: 16px;
+  align-items: center;
+}
+
+.workbench-hero h1 {
+  margin: 6px 0 8px;
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.workbench-hero p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.workbench-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.workbench-summary div {
+  min-height: 72px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 10px;
+  display: grid;
+  align-content: space-between;
+}
+
+.workbench-summary span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.workbench-summary strong {
+  font-size: 18px;
+}
+
+.multimodal-console {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.72fr) minmax(520px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.mmi-input-panel,
+.mmi-result-panel {
+  min-height: 100%;
+}
+
+.mmi-presets {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.context-toolbar,
+.inline-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inline-check {
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.inline-check input,
+.permission-chip input {
+  width: auto;
+  min-height: auto;
+  box-shadow: none;
+}
+
+.file-picked {
+  color: var(--good);
+  font-weight: 700;
+}
+
+.context-preview {
+  margin: 8px 0 0;
+  padding: 10px;
+  border: 1px solid #31464f;
+  background: #111b20;
+  color: #8bdc9f;
+  border-radius: 6px;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.context-preview-empty {
+  color: #aebfc6;
+}
+
+.result-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 14px 0;
+}
+
+.compact-plan-board {
+  grid-template-columns: 1fr;
+}
+
+.admin-governance-grid {
+  align-items: stretch;
+}
+
+.user-permission-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(170px, 220px);
+  align-items: start;
+}
+
+.user-admin-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.user-role-controls {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+
+.user-role-controls label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.user-role-controls label > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.permission-chip-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.permission-chip {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 6px;
+  padding: 7px 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.plugin-review-list {
+  display: grid;
+  gap: 10px;
+}
+
+.plugin-review-row {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.plugin-review-row p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(13, 22, 27, 0.52);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.modal-panel {
+  width: min(760px, 100%);
+  max-height: min(720px, calc(100vh - 36px));
+  overflow: auto;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(13, 22, 27, 0.28);
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.modal-head,
+.modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modal-head h2 {
+  margin: 4px 0 0;
+}
+
+.modal-close {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+}
+
+.guide-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 @media (max-width: 1180px) {
   .login-page,
   .dashboard-grid,
   .project-layout,
   .multimodal-grid,
+  .multimodal-console,
   .simulation-layout,
   .audit-layout,
   .settings-grid,
@@ -2194,6 +2434,7 @@ code {
   }
 
   .metrics-grid,
+  .workbench-hero,
   .health-grid,
   .plan-board,
   .metric-list,
@@ -2201,6 +2442,10 @@ code {
   .policy-grid,
   .landscape-options {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workbench-hero {
+    grid-template-columns: 1fr;
   }
 
   .project-list-panel {
@@ -2295,7 +2540,7 @@ code {
   }
 
   .workspace-ribbon {
-    position: static;
+    border-width: 0 0 1px;
   }
 
   .login-page {
@@ -2308,6 +2553,7 @@ code {
 
   .role-switcher,
   .metrics-grid,
+  .workbench-summary,
   .login-status-grid,
   .form-grid,
   .scene-details,
@@ -2339,8 +2585,19 @@ code {
   .task-card-row,
   .audit-row,
   .setting-row,
-  .version-item {
+  .version-item,
+  .user-permission-row,
+  .guide-grid {
     grid-template-columns: 1fr;
+  }
+
+  .modal-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .modal-actions .button {
+    width: 100%;
   }
 
   .table-row {

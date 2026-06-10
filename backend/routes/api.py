@@ -21,12 +21,15 @@ from ..schemas import (
     LoginRequest,
     MultimodalCommand,
     Project,
+    ReviewPluginRequest,
     ReplaceAssetRequest,
     Scene,
     Session,
     StartSimulationRequest,
     SubmitCommandRequest,
     Task,
+    UpdateUserPermissionsRequest,
+    UpdateUserRoleRequest,
     UpdateSceneTemplateRequest,
     WorkspaceBundle,
 )
@@ -105,6 +108,71 @@ def get_dashboard_summary():
         simulationSuccessRate=round((len(sims) / max(1, len(store.simulations))) * 100),
         pluginHealthRate=98,
     ))
+
+
+# ── Admin RBAC & Plugin Reviews ──────────────────────────
+
+@router.get("/admin/users")
+def list_admin_users():
+    return _ok(store.demo_users)
+
+
+@router.patch("/admin/users/{userId}/role")
+def update_user_role(userId: str, request: UpdateUserRoleRequest, actor: str = Query("admin")):
+    user = store._require(store.demo_users, userId, "用户")
+    if request.role not in store.ROLE_DEFAULT_PERMISSIONS:
+        raise HTTPException(400, "不支持的角色")
+    updated = user.model_copy(update={
+        "role": request.role,
+        "permissions": store.ROLE_DEFAULT_PERMISSIONS[request.role],
+    })
+    store.demo_users = [updated if item.id == userId else item for item in store.demo_users]
+    return _ok(updated)
+
+
+@router.patch("/admin/users/{userId}/permissions")
+def update_user_permissions(userId: str, request: UpdateUserPermissionsRequest, actor: str = Query("admin")):
+    user = store._require(store.demo_users, userId, "用户")
+    updated = user.model_copy(update={"permissions": request.permissions})
+    store.demo_users = [updated if item.id == userId else item for item in store.demo_users]
+    return _ok(updated)
+
+
+@router.delete("/admin/users/{userId}")
+def delete_user(userId: str, actor: str = Query("admin")):
+    user = store._require(store.demo_users, userId, "用户")
+    if user.role == "admin":
+        remaining_admins = [item for item in store.demo_users if item.role == "admin" and item.id != userId]
+        if not remaining_admins:
+            raise HTTPException(400, "不能删除最后一个管理员")
+    store.demo_users = [item for item in store.demo_users if item.id != userId]
+    return _ok({"deletedUserId": userId})
+
+
+@router.get("/admin/plugin-reviews")
+def list_plugin_reviews():
+    return _ok(store.plugin_reviews)
+
+
+@router.patch("/admin/plugin-reviews/{reviewId}")
+def review_plugin(reviewId: str, request: ReviewPluginRequest, actor: str = Query("admin")):
+    if request.status not in {"approved", "rejected", "pending"}:
+        raise HTTPException(400, "不支持的审核状态")
+    review = store._require(store.plugin_reviews, reviewId, "插件审核")
+    updated = review.model_copy(update={
+        "status": request.status,
+        "reviewedBy": actor if request.status != "pending" else "",
+        "note": request.note,
+        "reviewedAt": _now() if request.status != "pending" else None,
+    })
+    store.plugin_reviews = [updated if item.id == reviewId else item for item in store.plugin_reviews]
+
+    if request.status in {"approved", "rejected"}:
+        func = store._require(store.functions, updated.functionName, "函数", key="name")
+        function_update = func.model_copy(update={"enabled": request.status == "approved"})
+        store.functions = [function_update if item.name == func.name else item for item in store.functions]
+
+    return _ok(updated)
 
 
 # ── Projects ─────────────────────────────────────────────

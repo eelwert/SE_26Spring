@@ -472,3 +472,83 @@ def test_toggle_plugin_function_updates_enabled_state(client):
     bundle = client.get("/api/workspace/bundle").json()["data"]
     updated = next(item for item in bundle["functions"] if item["name"] == "set_street_width")
     assert updated["enabled"] is False
+
+
+def test_admin_users_list_returns_demo_users(client):
+    response = client.get("/api/admin/users")
+
+    assert response.status_code == 200
+    users = response.json()["data"]
+    assert {user["role"] for user in users} == {"modeler", "analyst", "admin"}
+    assert {user["email"] for user in users} >= {
+        "modeler@nku.city",
+        "analyst@nku.city",
+        "admin@nku.city",
+    }
+
+
+def test_admin_update_user_role_syncs_permissions_and_login(client):
+    response = client.patch(
+        "/api/admin/users/usr-analyst/role?actor=陈明策",
+        json={"role": "modeler"},
+    )
+
+    assert response.status_code == 200
+    updated = response.json()["data"]
+    assert updated["role"] == "modeler"
+    assert "layout:edit" in updated["permissions"]
+    assert "simulation:run" not in updated["permissions"]
+
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "analyst@nku.city", "password": "demo1234"},
+    ).json()["data"]
+    assert login["user"]["role"] == "modeler"
+    assert "layout:edit" in login["user"]["permissions"]
+
+
+def test_admin_update_user_permissions(client):
+    response = client.patch(
+        "/api/admin/users/usr-modeler/permissions?actor=陈明策",
+        json={"permissions": ["dashboard:view", "project:read"]},
+    )
+
+    assert response.status_code == 200
+    updated = response.json()["data"]
+    assert updated["permissions"] == ["dashboard:view", "project:read"]
+
+
+def test_admin_delete_user_succeeds_but_blocks_last_admin(client):
+    delete_modeler = client.delete("/api/admin/users/usr-modeler?actor=陈明策")
+
+    assert delete_modeler.status_code == 200
+    users = client.get("/api/admin/users").json()["data"]
+    assert {user["id"] for user in users} == {"usr-analyst", "usr-admin"}
+
+    delete_admin = client.delete("/api/admin/users/usr-admin?actor=陈明策")
+
+    assert delete_admin.status_code == 400
+    assert "最后一个管理员" in delete_admin.json()["detail"]
+
+
+def test_admin_plugin_review_updates_state_and_function_enabled(client):
+    reviews_response = client.get("/api/admin/plugin-reviews")
+
+    assert reviews_response.status_code == 200
+    reviews = reviews_response.json()["data"]
+    target = next(item for item in reviews if item["functionName"] == "dispatch_blender_job")
+
+    reject = client.patch(
+        f"/api/admin/plugin-reviews/{target['id']}?actor=陈明策",
+        json={"status": "rejected", "note": "演示中暂缓高风险函数"},
+    )
+
+    assert reject.status_code == 200
+    rejected = reject.json()["data"]
+    assert rejected["status"] == "rejected"
+    assert rejected["reviewedBy"] == "陈明策"
+    assert rejected["note"] == "演示中暂缓高风险函数"
+
+    bundle = client.get("/api/workspace/bundle").json()["data"]
+    function = next(item for item in bundle["functions"] if item["name"] == "dispatch_blender_job")
+    assert function["enabled"] is False

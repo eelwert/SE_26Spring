@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from '../services/api';
+import { backendFetchUrl } from '../services/api/config';
 import { wsClient } from '../services/ws';
 import type {
   Asset,
@@ -11,7 +12,9 @@ import type {
   LayoutRequest,
   MultimodalCommand,
   PluginFunction,
+  PluginReview,
   Project,
+  ReviewPluginRequest,
   ReplaceAssetRequest,
   RuntimeSetting,
   Scene,
@@ -21,7 +24,10 @@ import type {
   SubmitCommandRequest,
   SystemHealthItem,
   Task,
+  UpdateUserPermissionsRequest,
+  UpdateUserRoleRequest,
   UpdateSceneTemplateRequest,
+  User,
   VersionSnapshot,
   WorkspaceBundle,
 } from '../types/domain';
@@ -42,6 +48,8 @@ interface WorkspaceContextValue {
   auditLogs: AuditLog[];
   versions: VersionSnapshot[];
   functions: PluginFunction[];
+  users: User[];
+  pluginReviews: PluginReview[];
   settings: RuntimeSetting[];
   health: SystemHealthItem[];
   summary: DashboardSummary | null;
@@ -67,6 +75,10 @@ interface WorkspaceContextValue {
   rollbackVersion: (snapshotId: string) => Promise<void>;
   updateSetting: (settingId: string, value: RuntimeSetting['value']) => Promise<void>;
   togglePluginFunction: (functionName: string, enabled: boolean) => Promise<void>;
+  updateUserRole: (userId: string, request: UpdateUserRoleRequest) => Promise<void>;
+  updateUserPermissions: (userId: string, request: UpdateUserPermissionsRequest) => Promise<void>;
+  deleteUser: (userId: string) => Promise<void>;
+  reviewPlugin: (reviewId: string, request: ReviewPluginRequest) => Promise<void>;
 }
 
 const emptyBundle: WorkspaceBundle = {
@@ -89,6 +101,8 @@ const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const { session, isAuthenticated } = useSession();
   const [bundle, setBundle] = useState<WorkspaceBundle>(emptyBundle);
+  const [users, setUsers] = useState<User[]>([]);
+  const [pluginReviews, setPluginReviews] = useState<PluginReview[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [selectedProjectId, setSelectedProjectIdState] = useState<string | null>(null);
   const [selectedSceneId, setSelectedSceneIdState] = useState<string | null>(null);
@@ -114,15 +128,24 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     if (!isAuthenticated) {
       setBundle(emptyBundle);
       setSummary(null);
+      setUsers([]);
+      setPluginReviews([]);
       return;
     }
 
     setIsLoading(true);
     setError(null);
     try {
-      const [workspaceResponse, summaryResponse] = await Promise.all([api.getWorkspaceBundle(), api.getDashboardSummary()]);
+      const [workspaceResponse, summaryResponse, usersResponse, pluginReviewsResponse] = await Promise.all([
+        api.getWorkspaceBundle(),
+        api.getDashboardSummary(),
+        api.getAdminUsers(),
+        api.getPluginReviews(),
+      ]);
       applyBundle(workspaceResponse.data);
       setSummary(summaryResponse.data);
+      setUsers(usersResponse.data);
+      setPluginReviews(pluginReviewsResponse.data);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '工作区加载失败。');
     } finally {
@@ -405,6 +428,42 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     [actor, mutate],
   );
 
+  const updateUserRole = useCallback(
+    async (userId: string, request: UpdateUserRoleRequest) => {
+      await mutate(async () => {
+        await api.updateUserRole(userId, request, actor);
+      });
+    },
+    [actor, mutate],
+  );
+
+  const updateUserPermissions = useCallback(
+    async (userId: string, request: UpdateUserPermissionsRequest) => {
+      await mutate(async () => {
+        await api.updateUserPermissions(userId, request, actor);
+      });
+    },
+    [actor, mutate],
+  );
+
+  const deleteUser = useCallback(
+    async (userId: string) => {
+      await mutate(async () => {
+        await api.deleteUser(userId, actor);
+      });
+    },
+    [actor, mutate],
+  );
+
+  const reviewPlugin = useCallback(
+    async (reviewId: string, request: ReviewPluginRequest) => {
+      await mutate(async () => {
+        await api.reviewPlugin(reviewId, request, actor);
+      });
+    },
+    [actor, mutate],
+  );
+
   const value = useMemo<WorkspaceContextValue>(
     () => ({
       isLoading,
@@ -421,6 +480,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       auditLogs: bundle.auditLogs,
       versions: bundle.versions,
       functions: bundle.functions,
+      users,
+      pluginReviews,
       settings: bundle.settings,
       health: bundle.health,
       summary,
@@ -446,6 +507,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       rollbackVersion,
       updateSetting,
       togglePluginFunction,
+      updateUserRole,
+      updateUserPermissions,
+      deleteUser,
+      reviewPlugin,
     }),
     [
       isLoading,
@@ -453,6 +518,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       selectedProjectId,
       selectedSceneId,
       bundle,
+      users,
+      pluginReviews,
       summary,
       selectedProject,
       selectedScene,
@@ -475,6 +542,10 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       rollbackVersion,
       updateSetting,
       togglePluginFunction,
+      updateUserRole,
+      updateUserPermissions,
+      deleteUser,
+      reviewPlugin,
     ],
   );
 

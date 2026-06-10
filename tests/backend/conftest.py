@@ -17,6 +17,7 @@ from backend.server import app
 
 BASELINE = {
     "projects": copy.deepcopy(store.projects),
+    "demo_users": copy.deepcopy(store.demo_users),
     "scenes": copy.deepcopy(store.scenes),
     "assets": copy.deepcopy(store.assets),
     "templates": copy.deepcopy(store.templates),
@@ -26,10 +27,12 @@ BASELINE = {
     "audit_logs": copy.deepcopy(store.audit_logs),
     "versions": copy.deepcopy(store.versions),
     "functions": copy.deepcopy(store.functions),
+    "plugin_reviews": copy.deepcopy(store.plugin_reviews),
     "settings": copy.deepcopy(store.settings),
     "health": copy.deepcopy(store.health),
     "blender_connected": store.blender_connected,
     "blender_info": copy.deepcopy(store.blender_info),
+    "buildings_context": store.buildings_context,
     "frontend_active": store.frontend_active,
 }
 
