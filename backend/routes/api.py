@@ -478,7 +478,7 @@ def blender_register(body: dict):
 
 @router.get("/tasks/pending")
 def get_pending_tasks():
-    pending = [t for t in store.tasks if t.status == "queued"][:10]
+    pending = [t for t in reversed(store.tasks) if t.status == "queued"][:10]
     # Mark as running
     for t in pending:
         idx = next(i for i, x in enumerate(store.tasks) if x.id == t.id)
