@@ -1235,6 +1235,74 @@ a {
   margin: 12px 0;
 }
 
+.parameter-form {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.parameter-form-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.parameter-form-head span {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.param-toggle {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  padding: 0 12px;
+  color: var(--text);
+}
+
+.param-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}
+
+.generated-params-preview {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #18272d;
+  color: #e9f5f6;
+  overflow: hidden;
+}
+
+.generated-params-preview > span {
+  display: block;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  color: #bcd6db;
+  font-size: 12px;
+}
+
+.generated-params-preview pre {
+  margin: 0;
+  padding: 12px;
+  max-height: 220px;
+  overflow: auto;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
 .template-hints {
   border: 1px solid var(--line);
   background: var(--surface-2);
